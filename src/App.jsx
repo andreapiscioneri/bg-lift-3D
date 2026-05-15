@@ -18,11 +18,9 @@ export default function App() {
       <div className="relative flex-1 min-h-0 bg-white">
         <CraneScene />
 
-        {/* Branding angolo — riprende lo stile BGLift: nero + arancio */}
-        <div className="absolute top-3 left-4 flex items-baseline gap-1.5 select-none pointer-events-none">
-          <span className="text-base font-extrabold tracking-tight text-black">BG</span>
-          <span className="text-base font-extrabold tracking-tight text-accent">LIFT</span>
-          <span className="text-[11px] font-semibold tracking-[0.2em] text-black/60 ml-1">3D</span>
+        {/* Logo BG Lift nell'angolo della scena */}
+        <div className="absolute top-3 left-4 select-none pointer-events-none">
+          <img src="/Logo-BGLift.webp" alt="BG Lift" className="h-10 w-auto drop-shadow-sm" />
         </div>
       </div>
 
