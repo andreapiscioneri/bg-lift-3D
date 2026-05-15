@@ -1,0 +1,108 @@
+{
+  "$schema": "https://bglift.local/schemas/crane.schema.json",
+  "id": "BR0089",
+  "manufacturer": "BGLift",
+  "model": "BR0089",
+  "displayName": "BGLift BR0089",
+  "year": 2024,
+  "units": {
+    "length": "m",
+    "mass": "kg",
+    "force": "kN",
+    "angle": "deg",
+    "pressure": "kPa"
+  },
+
+  "chassis": {
+    "totalMass": 32000,
+    "wheelbase": 4.2,
+    "trackWidth": 2.5,
+    "centerOfGravity": { "x": 0.0, "y": 0.85, "z": -0.2 },
+    "groundClearance": 0.32
+  },
+
+  "turret": {
+    "rotationRangeDeg": [-360, 360],
+    "rotationSpeedDegPerSec": 1.5,
+    "mass": 4200,
+    "centerOfGravity": { "x": 0.0, "y": 1.4, "z": 0.0 },
+    "pivotHeight": 1.65
+  },
+
+  "mainBoom": {
+    "type": "telescopic-synchronous",
+    "sections": 3,
+    "retractedLength": 8.5,
+    "extendedLength": 24.0,
+    "sectionMass": [1850, 1320, 980],
+    "elevationRangeDeg": [-5, 82],
+    "elevationSpeedDegPerSec": 1.2,
+    "telescopeSpeedMPerSec": 0.35,
+    "pivot": { "x": 0.0, "y": 1.65, "z": 0.6 }
+  },
+
+  "jib": {
+    "available": true,
+    "type": "articulated-with-telescope",
+    "mass": 720,
+    "mountedOffsetM": 0.4,
+    "articulationRangeDeg": [0, 75],
+    "retractedLength": 4.0,
+    "extendedLength": 9.5,
+    "telescopeSpeedMPerSec": 0.25
+  },
+
+  "outriggers": {
+    "count": 4,
+    "layout": "H-frame",
+    "positions": {
+      "frontLeft":  { "x": -2.4, "y": 0.0, "z":  2.8 },
+      "frontRight": { "x":  2.4, "y": 0.0, "z":  2.8 },
+      "rearLeft":   { "x": -2.4, "y": 0.0, "z": -2.8 },
+      "rearRight":  { "x":  2.4, "y": 0.0, "z": -2.8 }
+    },
+    "extensionStepsM": [0.0, 1.6, 3.2, 4.8, 6.4],
+    "padArea_m2": 0.42,
+    "maxAllowableLoadPerPad_kN": 280,
+    "perOutriggerConfigurable": true
+  },
+
+  "loadChart": {
+    "description": "Estratto tabella SWL — capacità nominale (kg) per [angolo braccio principale, sfilo totale m]. Da popolare dall'Excel ufficiale BGLift.",
+    "angles_deg": [82, 75, 65, 55, 45, 35, 25, 15, 5],
+    "radii_m":    [3.0, 4.5, 6.0, 8.0, 10.0, 12.0, 15.0, 18.0, 22.0],
+    "swl_kg": [
+      [12000, 10500, 8800, 7100, 5600, 4400, 3300, 2500, 1800],
+      [11200,  9800, 8200, 6650, 5250, 4100, 3050, 2300, 1650],
+      [ 9600,  8400, 7100, 5800, 4550, 3500, 2600, 1950, 1400],
+      [ 7800,  6900, 5800, 4700, 3700, 2850, 2100, 1550, 1100],
+      [ 6200,  5400, 4500, 3600, 2800, 2150, 1550, 1150,  800],
+      [ 4800,  4150, 3400, 2700, 2050, 1550, 1100,  800,  550],
+      [ 3300,  2800, 2250, 1750, 1300,  950,  650,  450,  300],
+      [ 2100,  1750, 1380, 1050,  770,  550,  370,  240,  150],
+      [ 1100,   900,  700,  520,  370,  260,  170,  100,   60]
+    ],
+    "notes": [
+      "Valori indicativi: sostituire con i numeri della tabella ufficiale BGLift.",
+      "L'interpolazione bilineare nel worker presuppone valori monotonicamente decrescenti rispetto al raggio."
+    ]
+  },
+
+  "stabilityLimits": {
+    "tippingLineSafetyFactor": 1.25,
+    "structuralSafetyFactor": 1.33,
+    "maxDynamicLoadFactor": 1.10,
+    "warningThreshold": 0.85,
+    "criticalThreshold": 1.0
+  },
+
+  "defaultConfiguration": {
+    "outriggerExtensionM": { "frontLeft": 4.8, "frontRight": 4.8, "rearLeft": 4.8, "rearRight": 4.8 },
+    "mainBoomLengthM": 12.0,
+    "mainBoomAngleDeg": 55,
+    "rotationDeg": 0,
+    "jibAngleDeg": 0,
+    "jibLengthM": 0,
+    "loadKg": 0
+  }
+}

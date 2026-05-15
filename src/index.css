@@ -1,0 +1,39 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Reset minimo per pieno schermo / touch */
+html,
+body,
+#root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+  background: #ffffff;
+  color: #000000;
+  -webkit-tap-highlight-color: transparent;
+  font-family: 'Montserrat', system-ui, -apple-system, 'Segoe UI', sans-serif;
+  font-feature-settings: 'kern' 1;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Titoli BGLift: arancio, weight forte, tracking leggermente compresso */
+h1,
+h2,
+h3 {
+  color: #EC6726;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+
+/* Disabilita lo scroll elastic su iOS quando la scena 3D è a tutto schermo */
+body {
+  overscroll-behavior: none;
+}
+
+/* Touch target minimo per gli input range su WebKit */
+input[type='range'] {
+  -webkit-appearance: none;
+  touch-action: none;
+}
