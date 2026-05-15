@@ -2,7 +2,7 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Reset minimo per pieno schermo / touch */
+/* ── Reset fullscreen / touch ───────────────────────────────── */
 html,
 body,
 #root {
@@ -18,22 +18,48 @@ body,
   -moz-osx-font-smoothing: grayscale;
 }
 
-/* Titoli BGLift: arancio, weight forte, tracking leggermente compresso */
-h1,
-h2,
-h3 {
+h1, h2, h3 {
   color: #EC6726;
   font-weight: 800;
   letter-spacing: -0.01em;
 }
 
-/* Disabilita lo scroll elastic su iOS quando la scena 3D è a tutto schermo */
 body {
   overscroll-behavior: none;
 }
 
-/* Touch target minimo per gli input range su WebKit */
+/* ── Range input — touch-friendly thumb ─────────────────────── */
 input[type='range'] {
   -webkit-appearance: none;
-  touch-action: none;
+  appearance: none;
+  touch-action: none;       /* gestione pointer events manuale */
+  outline: none;
 }
+
+/* Webkit thumb — dimensione controllata da --thumb-size */
+input[type='range']::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  width:  var(--thumb-size, 26px);
+  height: var(--thumb-size, 26px);
+}
+
+/* Firefox thumb */
+input[type='range']::-moz-range-thumb {
+  width:  var(--thumb-size, 26px);
+  height: var(--thumb-size, 26px);
+  border: none;
+}
+
+/* ── Safe area per notch / home indicator iOS ───────────────── */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* ── Utility scrollbar sottile (pannello laterale) ──────────── */
+.overflow-y-auto {
+  scrollbar-width: thin;
+  scrollbar-color: #e5e5e5 transparent;
+}
+.overflow-y-auto::-webkit-scrollbar       { width: 4px; }
+.overflow-y-auto::-webkit-scrollbar-track { background: transparent; }
+.overflow-y-auto::-webkit-scrollbar-thumb { background: #e5e5e5; border-radius: 2px; }
