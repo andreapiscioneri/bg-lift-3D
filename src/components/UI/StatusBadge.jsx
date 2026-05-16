@@ -12,7 +12,7 @@ const STYLES = {
   critical: 'bg-danger/10 border-danger text-danger animate-pulse',
 }
 
-export default function StatusBadge({ safety }) {
+export default function StatusBadge({ safety, compact = false }) {
   if (!safety) {
     return (
       <div className="px-3 py-2 rounded-lg border border-line bg-white text-xs text-muted">
@@ -23,8 +23,36 @@ export default function StatusBadge({ safety }) {
 
   const klass = STYLES[safety.status] ?? STYLES.safe
   const label = LABELS[safety.status] ?? LABELS.safe
-
   const tippingPct = Math.max(0, Math.min(100, Math.round(safety.tippingMargin * 100)))
+
+  /* compact=true → versione ridotta per panel xs */
+  if (compact) {
+    return (
+      <div className={`rounded-lg border ${klass} text-xs overflow-hidden`}>
+        <div className="flex items-center justify-between gap-2 px-3 py-1.5">
+          <div className="flex items-center gap-1.5 font-extrabold tracking-wide">
+            <span className="inline-block h-2 w-2 rounded-full bg-current flex-shrink-0" />
+            {label}
+          </div>
+          <div className="flex items-center gap-2 font-mono text-[11px] text-black">
+            <span className="text-muted">{fmtM(safety.radiusM)}</span>
+            <span className="font-bold">{fmtPct(safety.loadUtil)}</span>
+          </div>
+        </div>
+        <div className="px-3 pb-2 flex flex-col gap-0.5">
+          <div className="h-1.5 rounded-full bg-black/10 overflow-hidden">
+            <div
+              className="h-full rounded-full transition-all duration-300"
+              style={{
+                width: `${tippingPct}%`,
+                background: safety.tippingMargin <= 0 ? '#dc2626' : safety.tippingMargin <= 0.20 ? '#b45309' : '#16a34a',
+              }}
+            />
+          </div>
+        </div>
+      </div>
+    )
+  }
 
   return (
     <div className={`rounded-lg border ${klass} text-xs overflow-hidden`}>

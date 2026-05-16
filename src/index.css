@@ -3,15 +3,14 @@
 @tailwind utilities;
 
 /* ── Reset fullscreen / touch ───────────────────────────────── */
-html,
-body,
-#root {
+html, body, #root {
   height: 100%;
   margin: 0;
   padding: 0;
   background: #ffffff;
   color: #000000;
   -webkit-tap-highlight-color: transparent;
+  -webkit-touch-callout: none;           /* disabilita menu contestuale iOS */
   font-family: 'Montserrat', system-ui, -apple-system, 'Segoe UI', sans-serif;
   font-feature-settings: 'kern' 1;
   -webkit-font-smoothing: antialiased;
@@ -28,38 +27,37 @@ body {
   overscroll-behavior: none;
 }
 
-/* ── Range input — touch-friendly thumb ─────────────────────── */
+/* ── Bottom sheet — usa dvh per l'address bar mobile ────────── */
+/* dvh = dynamic viewport height (si adatta a address bar iOS/Android) */
+.bottom-sheet {
+  height: 90vh;     /* fallback per browser vecchi */
+  height: 90dvh;    /* supportato da iOS 16+, Chrome 108+, Firefox 101+ */
+}
+
+/* ── Range input — thumb touch-friendly ─────────────────────── */
 input[type='range'] {
   -webkit-appearance: none;
   appearance: none;
-  touch-action: none;       /* gestione pointer events manuale */
+  touch-action: none;
   outline: none;
 }
-
-/* Webkit thumb — dimensione controllata da --thumb-size */
 input[type='range']::-webkit-slider-thumb {
   -webkit-appearance: none;
   width:  var(--thumb-size, 26px);
   height: var(--thumb-size, 26px);
 }
-
-/* Firefox thumb */
 input[type='range']::-moz-range-thumb {
   width:  var(--thumb-size, 26px);
   height: var(--thumb-size, 26px);
   border: none;
 }
 
-/* ── Safe area per notch / home indicator iOS ───────────────── */
-.safe-bottom {
-  padding-bottom: env(safe-area-inset-bottom);
-}
-
-/* ── Utility scrollbar sottile (pannello laterale) ──────────── */
+/* ── Scrollbar sottile nei pannelli ─────────────────────────── */
 .overflow-y-auto {
+  -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: #e5e5e5 transparent;
 }
-.overflow-y-auto::-webkit-scrollbar       { width: 4px; }
+.overflow-y-auto::-webkit-scrollbar       { width: 3px; }
 .overflow-y-auto::-webkit-scrollbar-track { background: transparent; }
 .overflow-y-auto::-webkit-scrollbar-thumb { background: #e5e5e5; border-radius: 2px; }
