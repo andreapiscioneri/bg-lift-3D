@@ -15,6 +15,10 @@ export const useCraneStore = create((set, get) => ({
   // --- Output dal worker ---
   safety: null,
 
+  // --- Drag interaction (disabilita OrbitControls durante direct manipulation) ---
+  isDragging: false,
+  setDragging: (v) => set({ isDragging: v }),
+
   // --- Setter ---
   setConfig: (patch) =>
     set((s) => ({ config: { ...s.config, ...patch } })),
