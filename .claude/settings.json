@@ -23,7 +23,9 @@
       "Bash(echo \"exit: $?\")",
       "Bash(node scripts/convert-step.js ~/Downloads/\"Assieme Braccio M250.IGS\" /tmp/braccio-m250-igs-test.glb)",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5183/)",
-      "Bash(pkill -f \"vite --port 5183\")"
+      "Bash(pkill -f \"vite --port 5183\")",
+      "Bash(pkill -f \"Google Chrome\")",
+      "Bash(npm run *)"
     ]
   }
 }

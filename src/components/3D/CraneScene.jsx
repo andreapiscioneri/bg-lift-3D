@@ -17,7 +17,11 @@ const BOOM_NATIVE_LENGTH = BOOM_NATIVE_MAX_Y - BOOM_NATIVE_MIN_Y
 
 useGLTF.preload(BOOM_MODEL_URL)
 
-function BoomCadModel({ length }) {
+// Le 11 piastre/pistone principali dell'assieme corrono per il 70-90% dell'intera
+// lunghezza (sono un traliccio saldato, non 3 tronchi modulari): non sono
+// separabili senza tagliare la mesh (CSG), quindi il modello resta un unico
+// pezzo rigido, non distorto, scalato alla sua vera lunghezza retratta.
+function BoomCadModel({ retracted }) {
   const { scene } = useGLTF(BOOM_MODEL_URL)
 
   const cloned = useMemo(() => {
@@ -31,7 +35,7 @@ function BoomCadModel({ length }) {
     return clone
   }, [scene])
 
-  const scale = length / BOOM_NATIVE_LENGTH
+  const scale = retracted / BOOM_NATIVE_LENGTH
 
   return (
     <group scale={[scale, scale, scale]}>
@@ -130,7 +134,7 @@ function CraneAssembly() {
              rotation={[0, -d2r(config.rotationDeg), 0]}>
         <SlewingBase />
         <Counterweight />
-        <TelescopicBoom model={model} config={config} statusCol={statusCol} />
+        <TelescopicBoom model={model} config={config} />
       </group>
 
       {safety && (
@@ -274,7 +278,7 @@ function OutriggerBeams({ model, config, statusCol }) {
   )
 }
 
-function TelescopicBoom({ model, config, statusCol }) {
+function TelescopicBoom({ model, config }) {
   const totalLen  = config.mainBoomLengthM
   const angleRad  = d2r(config.mainBoomAngleDeg)
   const retracted = model.mainBoom.retractedLength
@@ -285,13 +289,13 @@ function TelescopicBoom({ model, config, statusCol }) {
   return (
     <group position={[0, 0, pivotZ]}>
       <group rotation={[Math.PI / 2 - angleRad, 0, 0]}>
-        {/* Sezione base — modello CAD reale (Assieme Braccio M250) */}
-        <BoomCadModel length={retracted} />
-        {/* Estensione telescopica oltre la sezione base — procedurale */}
+        {/* Sezione base — modello CAD reale (Assieme Braccio M250), pezzo unico non distorto */}
+        <BoomCadModel retracted={retracted} />
+        {/* Tronco interno che fuoriesce oltre la sezione base durante lo sfilo */}
         {extLen > 0 && (
           <mesh castShadow position={[0, retracted + extLen / 2, 0]}>
-            <cylinderGeometry args={[0.12, 0.17, extLen, 10]} />
-            <meshStandardMaterial color={statusCol} metalness={0.5} roughness={0.38} />
+            <cylinderGeometry args={[0.13, 0.17, extLen, 12]} />
+            <meshStandardMaterial color="#4a4d52" metalness={0.55} roughness={0.4} />
           </mesh>
         )}
         <mesh position={[0, s3, 0]}>
@@ -517,16 +521,10 @@ function InteractiveLayer() {
         </Html>
       </group>
 
-      {/* ── Handle punta braccio ───────────────────────────────── */}
+      {/* ── Handle punta braccio (invisibile — resta attivo per il drag) ── */}
       <mesh position={[tipX, tipHeight, tipZ]} onPointerDown={startBoomDrag}>
         <sphereGeometry args={[0.32, 16, 16]} />
-        <meshStandardMaterial
-          color={statusCol}
-          emissive={statusCol}
-          emissiveIntensity={0.5}
-          roughness={0.3}
-          metalness={0.2}
-        />
+        <meshStandardMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
 
       {/* HUD braccio — vicino alla punta */}
