@@ -1,9 +1,44 @@
-import { Suspense, useRef, useEffect, useCallback } from 'react'
+import { Suspense, useRef, useEffect, useCallback, useMemo } from 'react'
 import * as THREE from 'three'
 import { Canvas, useThree } from '@react-three/fiber'
-import { OrbitControls, Grid, ContactShadows, Environment, Html } from '@react-three/drei'
+import { OrbitControls, Grid, ContactShadows, Environment, Html, useGLTF } from '@react-three/drei'
 import { useCraneStore } from '../../store/craneStore'
 import { statusColor, fmtM, fmtKg } from '../../utils/format'
+
+// ─────────────────────────────────────────────────────────────────
+// Modello CAD reale — "Assieme Braccio M250" (convertito da STEP)
+// Asse lungo nativo = Y, base a y = NATIVE_MIN_Y, punta a y = NATIVE_MAX_Y.
+// ─────────────────────────────────────────────────────────────────
+
+const BOOM_MODEL_URL = '/models/braccio-m250.glb'
+const BOOM_NATIVE_MIN_Y = -1.7703024339066644
+const BOOM_NATIVE_MAX_Y = 1.5076975660933378
+const BOOM_NATIVE_LENGTH = BOOM_NATIVE_MAX_Y - BOOM_NATIVE_MIN_Y
+
+useGLTF.preload(BOOM_MODEL_URL)
+
+function BoomCadModel({ length }) {
+  const { scene } = useGLTF(BOOM_MODEL_URL)
+
+  const cloned = useMemo(() => {
+    const clone = scene.clone(true)
+    clone.traverse((obj) => {
+      if (obj.isMesh) {
+        obj.castShadow = true
+        obj.receiveShadow = true
+      }
+    })
+    return clone
+  }, [scene])
+
+  const scale = length / BOOM_NATIVE_LENGTH
+
+  return (
+    <group scale={[scale, scale, scale]}>
+      <primitive object={cloned} position={[0, -BOOM_NATIVE_MIN_Y, 0]} />
+    </group>
+  )
+}
 
 // ─────────────────────────────────────────────────────────────────
 // Canvas root
@@ -243,28 +278,22 @@ function TelescopicBoom({ model, config, statusCol }) {
   const totalLen  = config.mainBoomLengthM
   const angleRad  = d2r(config.mainBoomAngleDeg)
   const retracted = model.mainBoom.retractedLength
-  const maxLen    = model.mainBoom.extendedLength
   const pivotZ    = model.mainBoom.pivot.z
-  const extRatio  = Math.max(0, (totalLen - retracted) / (maxLen - retracted))
-  const s1 = retracted
-  const s2 = retracted + extRatio * (maxLen - retracted) * 0.55
   const s3 = totalLen
+  const extLen = Math.max(0, totalLen - retracted)
 
   return (
     <group position={[0, 0, pivotZ]}>
       <group rotation={[Math.PI / 2 - angleRad, 0, 0]}>
-        <mesh castShadow position={[0, s1 / 2, 0]}>
-          <cylinderGeometry args={[0.26, 0.32, s1, 14]} />
-          <meshStandardMaterial color="#2a2a2a" metalness={0.45} roughness={0.45} />
-        </mesh>
-        <mesh castShadow position={[0, s2 / 2, 0]}>
-          <cylinderGeometry args={[0.19, 0.24, s2, 12]} />
-          <meshStandardMaterial color="#383838" metalness={0.45} roughness={0.42} />
-        </mesh>
-        <mesh castShadow position={[0, s3 / 2, 0]}>
-          <cylinderGeometry args={[0.12, 0.17, s3, 10]} />
-          <meshStandardMaterial color={statusCol} metalness={0.5} roughness={0.38} />
-        </mesh>
+        {/* Sezione base — modello CAD reale (Assieme Braccio M250) */}
+        <BoomCadModel length={retracted} />
+        {/* Estensione telescopica oltre la sezione base — procedurale */}
+        {extLen > 0 && (
+          <mesh castShadow position={[0, retracted + extLen / 2, 0]}>
+            <cylinderGeometry args={[0.12, 0.17, extLen, 10]} />
+            <meshStandardMaterial color={statusCol} metalness={0.5} roughness={0.38} />
+          </mesh>
+        )}
         <mesh position={[0, s3, 0]}>
           <boxGeometry args={[0.22, 0.16, 0.22]} />
           <meshStandardMaterial color={DARK} metalness={0.65} roughness={0.3} />
