@@ -44,9 +44,10 @@ if (!result.success) {
 
 console.log(`Parsed ${result.meshes.length} meshes from STEP file`);
 
-const scene = new THREE.Scene();
-
-for (const meshData of result.meshes) {
+// Costruisce i THREE.Mesh una sola volta; verranno agganciati all'albero
+// dei sotto-assiemi (result.root) cosi' la gerarchia vista nel CAD (es.
+// "BR0089", "MR0003S_Chiuso", ...) resta accessibile per nome nel GLB.
+const meshObjects = result.meshes.map((meshData, i) => {
   const geometry = new THREE.BufferGeometry();
 
   geometry.setAttribute(
@@ -76,9 +77,30 @@ for (const meshData of result.meshes) {
   });
 
   const mesh = new THREE.Mesh(geometry, material);
-  mesh.name = meshData.name || 'part';
-  scene.add(mesh);
+  mesh.name = meshData.name || `part_${i}`;
+  return mesh;
+});
+
+function sanitizeName(name, fallback) {
+  return (name && name.trim()) || fallback;
 }
+
+let groupCounter = 0;
+
+function buildNode(node) {
+  const group = new THREE.Group();
+  group.name = sanitizeName(node.name, `group_${groupCounter++}`);
+  for (const meshIndex of node.meshes) {
+    group.add(meshObjects[meshIndex]);
+  }
+  for (const child of node.children) {
+    group.add(buildNode(child));
+  }
+  return group;
+}
+
+const scene = new THREE.Scene();
+scene.add(buildNode(result.root));
 
 const exporter = new GLTFExporter();
 

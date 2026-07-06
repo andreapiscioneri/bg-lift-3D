@@ -3,7 +3,6 @@ import * as THREE from 'three'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, Grid, ContactShadows, Environment, Html, useGLTF } from '@react-three/drei'
 import { useCraneStore } from '../../store/craneStore'
-import { statusColor, fmtM, fmtKg } from '../../utils/format'
 
 // ─────────────────────────────────────────────────────────────────
 // Modello CAD reale — "Assieme Braccio M250" (convertito da STEP)
@@ -13,33 +12,101 @@ import { statusColor, fmtM, fmtKg } from '../../utils/format'
 const BOOM_MODEL_URL = '/models/braccio-m250.glb'
 const BOOM_NATIVE_MIN_Y = -1.7703024339066644
 const BOOM_NATIVE_MAX_Y = 1.5076975660933378
-const BOOM_NATIVE_LENGTH = BOOM_NATIVE_MAX_Y - BOOM_NATIVE_MIN_Y
+export const BOOM_NATIVE_LENGTH = BOOM_NATIVE_MAX_Y - BOOM_NATIVE_MIN_Y
+const BOOM_ASSEMBLY_NODE = 'Assieme_Braccio_M250'
+
+// Nomi reali dei sotto-assiemi cosi' come appaiono nel file CAD originale:
+// BR0089/BR0007/BR0008/BR0009 = le 4 piastre del cassone saldato (corrono quasi
+// per l'intera lunghezza — non sono stadi telescopici separabili), CR0082 = testa/
+// puleggia in punta, MR0003S_Chiuso = martinetto idraulico di sollevamento angolo,
+// GA0001/BC0040/PR0038 = perni di attacco alla base.
+export const BOOM_PART_NAMES = [
+  'BR0089', 'BR0007', 'BR0008', 'BR0009', 'CR0082',
+  'MR0003S_Chiuso', 'GA0001', 'BC0040', 'PR0038',
+]
 
 useGLTF.preload(BOOM_MODEL_URL)
 
-// Le 11 piastre/pistone principali dell'assieme corrono per il 70-90% dell'intera
-// lunghezza (sono un traliccio saldato, non 3 tronchi modulari): non sono
-// separabili senza tagliare la mesh (CSG), quindi il modello resta un unico
-// pezzo rigido, non distorto, scalato alla sua vera lunghezza retratta.
-function BoomCadModel({ retracted }) {
+// Corsa massima approssimativa del martinetto (MR0003S_Chiuso), in unità
+// native prima dello scale finale — senza dati di corsa reali del martinetto
+// andrebbe tarata su un valore certificato. "Lunghezza sfilo" pilota
+// direttamente la Pos. Y del martinetto: sono la stessa identica grandezza,
+// per questo il valore mostrato nell'accordion del pezzo cambia insieme allo
+// slider "Lunghezza sfilo" in cima al pannello.
+export const RAM_MAX_STROKE_NATIVE = 1.2
+export const RAM_PART_NAME = 'MR0003S_Chiuso'
+
+const ZERO3 = [0, 0, 0]
+const d2rArr = (deg) => [d2r(deg[0]), d2r(deg[1]), d2r(deg[2])]
+
+// Un pezzo, con pivot di rotazione nel proprio baricentro:
+//   <group position=P>            ← spostamento manuale (unità native, prima dello scale finale)
+//     <group position=C>          ← porta il pivot al baricentro originale del pezzo
+//       <group rotation=R>        ← ruota attorno a quel pivot
+//         <group position=-C>     ← riporta la geometria in modo che il baricentro coincida col pivot
+//           <primitive/>
+// Senza questo, ruotare un pezzo lo farebbe roteare attorno all'origine
+// dell'intero assieme (0,0,0) anziché "sul posto".
+function PartWithPivot({ center, position, rotation, children }) {
+  return (
+    <group position={position}>
+      <group position={center}>
+        <group rotation={rotation}>
+          <group position={[-center[0], -center[1], -center[2]]}>
+            {children}
+          </group>
+        </group>
+      </group>
+    </group>
+  )
+}
+
+// Ogni pezzo dell'assieme è esposto come gruppo indipendente, controllabile
+// via `partTransforms[nomePezzo] = { position: [x,y,z] metri, rotation: [x,y,z] gradi }`
+// — pieno controllo manuale su ogni componente reale del file STEP. Per il
+// martinetto (RAM_PART_NAME) la Pos. Y non è manuale: è pilotata da
+// `ramPositionYNative`, cioè da "Lunghezza sfilo" — X, Z e rotazione restano
+// liberi. Il resto del modello mantiene sempre le proporzioni reali (scala
+// uniforme sulla lunghezza retratta): stirare l'intero cassone in base allo
+// sfilo lo deformava (diventava una lama sottile, non realistico).
+function BoomCadModel({ retracted, partTransforms = {}, ramPositionYNative = 0 }) {
   const { scene } = useGLTF(BOOM_MODEL_URL)
 
-  const cloned = useMemo(() => {
-    const clone = scene.clone(true)
-    clone.traverse((obj) => {
-      if (obj.isMesh) {
-        obj.castShadow = true
-        obj.receiveShadow = true
-      }
+  const parts = useMemo(() => {
+    const assembly = scene.getObjectByName(BOOM_ASSEMBLY_NODE) ?? scene
+
+    return assembly.children.map((child) => {
+      const center = new THREE.Box3().setFromObject(child).getCenter(new THREE.Vector3())
+      const clone = child.clone(true)
+      clone.traverse((obj) => {
+        if (obj.isMesh) {
+          obj.castShadow = true
+          obj.receiveShadow = true
+        }
+      })
+      clone.userData.center = center.toArray()
+      return clone
     })
-    return clone
   }, [scene])
 
   const scale = retracted / BOOM_NATIVE_LENGTH
 
   return (
-    <group scale={[scale, scale, scale]}>
-      <primitive object={cloned} position={[0, -BOOM_NATIVE_MIN_Y, 0]} />
+    <group scale={[scale, scale, scale]} position={[0, -BOOM_NATIVE_MIN_Y, 0]}>
+      {parts.map((part) => {
+        const t = partTransforms[part.name]
+        const manualPosition = t?.position ?? ZERO3
+        const rotation = t?.rotation ? d2rArr(t.rotation) : ZERO3
+        const position = part.name === RAM_PART_NAME
+          ? [manualPosition[0], ramPositionYNative, manualPosition[2]]
+          : manualPosition
+
+        return (
+          <PartWithPivot key={part.name} center={part.userData.center} position={position} rotation={rotation}>
+            <primitive object={part} />
+          </PartWithPivot>
+        )
+      })}
     </group>
   )
 }
@@ -114,229 +181,40 @@ function Ground() {
 // Crane assembly (passivo — solo rendering)
 // ─────────────────────────────────────────────────────────────────
 
-const ORANGE   = '#EC6726'
-const DARK     = '#1a1a1a'
-const MID      = '#2e2e2e'
-const DARKGRAY = '#3a3a3a'
-
 function CraneAssembly() {
-  const model    = useCraneStore((s) => s.model)
-  const config   = useCraneStore((s) => s.config)
-  const safety   = useCraneStore((s) => s.safety)
-  const statusCol = statusColor(safety?.status ?? 'safe')
+  const model          = useCraneStore((s) => s.model)
+  const config         = useCraneStore((s) => s.config)
+  const partTransforms = useCraneStore((s) => s.partTransforms)
 
   return (
-    <group>
-      <TruckCarrier />
-      <OutriggerBeams model={model} config={config} statusCol={statusCol} />
-
-      <group position={[0, model.turret.pivotHeight, 0]}
-             rotation={[0, -d2r(config.rotationDeg), 0]}>
-        <SlewingBase />
-        <Counterweight />
-        <TelescopicBoom model={model} config={config} />
-      </group>
-
-      {safety && (
-        <LoadRing
-          safety={safety}
-          loadKg={config.loadKg}
-          rotationDeg={config.rotationDeg}
-          color={statusCol}
-        />
-      )}
+    <group position={[0, model.turret.pivotHeight, 0]}
+           rotation={[0, -d2r(config.rotationDeg), 0]}>
+      <TelescopicBoom model={model} config={config} partTransforms={partTransforms} />
     </group>
   )
 }
 
-// ── Truck ────────────────────────────────────────────────────────
-
-function TruckCarrier() {
-  return (
-    <group>
-      <mesh castShadow receiveShadow position={[0, 0.7, -0.3]}>
-        <boxGeometry args={[2.4, 1.4, 8.8]} />
-        <meshStandardMaterial color={ORANGE} metalness={0.2} roughness={0.55} />
-      </mesh>
-      <mesh castShadow position={[0, 1.6, 3.6]}>
-        <boxGeometry args={[2.35, 1.9, 2.4]} />
-        <meshStandardMaterial color="#c25112" metalness={0.15} roughness={0.5} />
-      </mesh>
-      <mesh position={[0, 1.9, 4.79]}>
-        <boxGeometry args={[2.0, 0.9, 0.07]} />
-        <meshStandardMaterial color="#1b3a5a" transparent opacity={0.72} />
-      </mesh>
-      {[-1.19, 1.19].map((x, i) => (
-        <mesh key={i} position={[x, 1.9, 3.6]}>
-          <boxGeometry args={[0.07, 0.7, 1.8]} />
-          <meshStandardMaterial color="#1b3a5a" transparent opacity={0.65} />
-        </mesh>
-      ))}
-      <mesh position={[0, 0.5, 4.9]}>
-        <boxGeometry args={[2.3, 0.45, 0.15]} />
-        <meshStandardMaterial color={DARK} metalness={0.5} roughness={0.4} />
-      </mesh>
-      {[{ z: -3.2, dual: true }, { z: -1.4, dual: true }, { z: 1.6, dual: false }, { z: 3.5, dual: false }]
-        .map(({ z, dual }, ai) =>
-          [-1.28, 1.28].map((x, si) => (
-            <WheelSet key={`w${ai}${si}`} x={x} y={0.42} z={z} dual={dual} outboard={x > 0} />
-          ))
-        )}
-      {[-1.26, 1.26].map((x, i) => (
-        <mesh key={i} castShadow position={[x, 0.7, -1.0]}>
-          <boxGeometry args={[0.11, 0.65, 4.2]} />
-          <meshStandardMaterial color={DARKGRAY} metalness={0.3} roughness={0.6} />
-        </mesh>
-      ))}
-    </group>
-  )
-}
-
-function WheelSet({ x, y, z, dual, outboard }) {
-  const outer = outboard ? 0.14 : -0.14
-  return (
-    <group position={[x, y, z]}>
-      <mesh castShadow rotation={[0, 0, Math.PI / 2]}>
-        <cylinderGeometry args={[0.42, 0.42, 0.22, 20]} />
-        <meshStandardMaterial color={DARK} roughness={0.9} />
-      </mesh>
-      {dual && (
-        <mesh castShadow rotation={[0, 0, Math.PI / 2]} position={[outboard ? -0.25 : 0.25, 0, 0]}>
-          <cylinderGeometry args={[0.42, 0.42, 0.22, 20]} />
-          <meshStandardMaterial color={DARK} roughness={0.9} />
-        </mesh>
-      )}
-      <mesh rotation={[0, 0, Math.PI / 2]} position={[outer, 0, 0]}>
-        <cylinderGeometry args={[0.22, 0.22, 0.04, 12]} />
-        <meshStandardMaterial color="#4a4a4a" metalness={0.75} roughness={0.3} />
-      </mesh>
-    </group>
-  )
-}
-
-function SlewingBase() {
-  return (
-    <>
-      <mesh castShadow position={[0, 0.05, 0]}>
-        <cylinderGeometry args={[1.15, 1.15, 0.1, 24]} />
-        <meshStandardMaterial color={MID} metalness={0.7} roughness={0.3} />
-      </mesh>
-      <mesh castShadow position={[0, 0.42, 0]}>
-        <cylinderGeometry args={[0.88, 1.05, 0.74, 24]} />
-        <meshStandardMaterial color={DARK} metalness={0.4} roughness={0.5} />
-      </mesh>
-      <mesh castShadow position={[0, 0.88, 0.2]}>
-        <boxGeometry args={[1.1, 0.55, 1.4]} />
-        <meshStandardMaterial color={DARK} metalness={0.35} roughness={0.55} />
-      </mesh>
-    </>
-  )
-}
-
-function Counterweight() {
-  return (
-    <mesh castShadow position={[0, 0.55, -1.6]}>
-      <boxGeometry args={[1.7, 0.9, 1.4]} />
-      <meshStandardMaterial color="#222222" metalness={0.35} roughness={0.6} />
-    </mesh>
-  )
-}
-
-function OutriggerBeams({ model, config, statusCol }) {
-  return (
-    <group>
-      {Object.entries(model.outriggers.positions).map(([name, base]) => {
-        const ext   = config.outriggerExtensionM?.[name] ?? 0
-        const side  = Math.sign(base.x) || 1
-        const padX  = side * (Math.abs(base.x) + ext)
-        const edgeX = side * 1.2
-        const beamLen = Math.abs(padX - edgeX)
-        const beamCX  = (padX + edgeX) / 2
-        return (
-          <group key={name}>
-            <mesh castShadow position={[edgeX + side * 0.3, 0.28, base.z]}>
-              <boxGeometry args={[0.55, 0.3, 0.38]} />
-              <meshStandardMaterial color={DARKGRAY} metalness={0.3} roughness={0.6} />
-            </mesh>
-            <mesh castShadow position={[beamCX, 0.28, base.z]}>
-              <boxGeometry args={[beamLen, 0.22, 0.28]} />
-              <meshStandardMaterial color={MID} metalness={0.4} roughness={0.5} />
-            </mesh>
-            <mesh castShadow position={[padX, 0.18, base.z]}>
-              <cylinderGeometry args={[0.07, 0.10, 0.36, 10]} />
-              <meshStandardMaterial color="#505050" metalness={0.55} roughness={0.4} />
-            </mesh>
-            {/* Pad — solo rendering, il drag handle è in InteractiveLayer */}
-            <mesh castShadow receiveShadow position={[padX, 0.03, base.z]}>
-              <cylinderGeometry args={[0.34, 0.34, 0.055, 18]} />
-              <meshStandardMaterial color={statusCol} metalness={0.15} roughness={0.7} />
-            </mesh>
-          </group>
-        )
-      })}
-    </group>
-  )
-}
-
-function TelescopicBoom({ model, config }) {
-  const totalLen  = config.mainBoomLengthM
+function TelescopicBoom({ model, config, partTransforms }) {
   const angleRad  = d2r(config.mainBoomAngleDeg)
   const retracted = model.mainBoom.retractedLength
+  const extended  = model.mainBoom.extendedLength
   const pivotZ    = model.mainBoom.pivot.z
-  const s3 = totalLen
-  const extLen = Math.max(0, totalLen - retracted)
+  // L'angolo ruota già visibilmente l'intero braccio; "Lunghezza sfilo" pilota
+  // invece direttamente la Pos. Y del martinetto (RAM_PART_NAME) — sono la
+  // stessa identica grandezza.
+  const lengthFrac = clamp((config.mainBoomLengthM - retracted) / (extended - retracted), 0, 1)
+  const ramPositionYNative = lengthFrac * RAM_MAX_STROKE_NATIVE
 
   return (
     <group position={[0, 0, pivotZ]}>
       <group rotation={[Math.PI / 2 - angleRad, 0, 0]}>
-        {/* Sezione base — modello CAD reale (Assieme Braccio M250), pezzo unico non distorto */}
-        <BoomCadModel retracted={retracted} />
-        {/* Tronco interno che fuoriesce oltre la sezione base durante lo sfilo */}
-        {extLen > 0 && (
-          <mesh castShadow position={[0, retracted + extLen / 2, 0]}>
-            <cylinderGeometry args={[0.13, 0.17, extLen, 12]} />
-            <meshStandardMaterial color="#4a4d52" metalness={0.55} roughness={0.4} />
-          </mesh>
-        )}
-        <mesh position={[0, s3, 0]}>
-          <boxGeometry args={[0.22, 0.16, 0.22]} />
-          <meshStandardMaterial color={DARK} metalness={0.65} roughness={0.3} />
-        </mesh>
-        {model.jib?.available && config.jibLengthM > 0 && (
-          <group position={[0, s3, 0]} rotation={[-d2r(config.jibAngleDeg), 0, 0]}>
-            <mesh castShadow position={[0, config.jibLengthM / 2, 0]}>
-              <cylinderGeometry args={[0.07, 0.10, config.jibLengthM, 10]} />
-              <meshStandardMaterial color={DARKGRAY} metalness={0.35} roughness={0.55} />
-            </mesh>
-            <mesh position={[0, config.jibLengthM, 0]}>
-              <boxGeometry args={[0.12, 0.10, 0.12]} />
-              <meshStandardMaterial color={DARK} metalness={0.6} roughness={0.35} />
-            </mesh>
-          </group>
-        )}
+        {/* Modello CAD reale (Assieme Braccio M250) — unico contenuto della scena */}
+        <BoomCadModel
+          retracted={retracted}
+          ramPositionYNative={ramPositionYNative}
+          partTransforms={partTransforms}
+        />
       </group>
-    </group>
-  )
-}
-
-function LoadRing({ safety, loadKg, rotationDeg, color }) {
-  // Posizione corretta: ruota con la torretta (rotationDeg = 0 → Z positivo)
-  const rotRad = d2r(rotationDeg)
-  const x = Math.sin(rotRad) * safety.radiusM
-  const z = Math.cos(rotRad) * safety.radiusM
-  return (
-    <group>
-      <mesh position={[x, 0.06, z]} rotation={[Math.PI / 2, 0, 0]}>
-        <ringGeometry args={[0.28, 0.40, 28]} />
-        <meshBasicMaterial color={color} side={2} />
-      </mesh>
-      {loadKg > 0 && (
-        <Html position={[x, 0.7, z]} center style={{ pointerEvents: 'none' }}>
-          <div className="px-2 py-1 rounded bg-white border border-line text-xs font-semibold text-black shadow-panel">
-            {Math.round(loadKg).toLocaleString('it-IT')} kg
-          </div>
-        </Html>
-      )}
     </group>
   )
 }
@@ -354,16 +232,13 @@ function InteractiveLayer() {
   const { camera, gl } = useThree()
   const model       = useCraneStore((s) => s.model)
   const config      = useCraneStore((s) => s.config)
-  const safety      = useCraneStore((s) => s.safety)
   const setConfig   = useCraneStore((s) => s.setConfig)
-  const setOutrigger = useCraneStore((s) => s.setOutrigger)
   const setDragging = useCraneStore((s) => s.setDragging)
 
   // Refs per evitare stale closures nei window listener
   const modelRef      = useRef(model);      modelRef.current = model
   const configRef     = useRef(config);     configRef.current = config
   const setConfigRef  = useRef(setConfig);  setConfigRef.current = setConfig
-  const setOutRef     = useRef(setOutrigger); setOutRef.current = setOutrigger
 
   const activeDrag = useRef(null)   // { type, plane, ...extras }
   const raycaster  = useRef(new THREE.Raycaster())
@@ -387,14 +262,7 @@ function InteractiveLayer() {
       const clientY = e.clientY ?? e.touches?.[0]?.clientY ?? 0
       const m = modelRef.current
 
-      if (drag.type === 'rotation') {
-        const pt = getHit(clientX, clientY, drag.plane)
-        if (!pt) return
-        const angle = Math.atan2(pt.x, pt.z) * (180 / Math.PI)
-        setConfigRef.current({ rotationDeg: angle })
-      }
-
-      else if (drag.type === 'boom') {
+      if (drag.type === 'boom') {
         const pt = getHit(clientX, clientY, drag.plane)
         if (!pt) return
         // Vettore dal pivot al punto toccato, proiettato nel piano del braccio
@@ -409,18 +277,6 @@ function InteractiveLayer() {
         })
       }
 
-      else if (drag.type === 'outrigger') {
-        const pt = getHit(clientX, clientY, drag.plane)
-        if (!pt) return
-        const absX  = Math.abs(pt.x)
-        const steps = m.outriggers.extensionStepsM
-        const raw   = absX - Math.abs(drag.baseX)
-        // Snap allo step più vicino
-        const snapped = steps.reduce((best, s) =>
-          Math.abs(s - raw) < Math.abs(best - raw) ? s : best
-        )
-        setOutRef.current(drag.name, clamp(snapped, 0, Math.max(...steps)))
-      }
     }
 
     function onUp() {
@@ -440,14 +296,6 @@ function InteractiveLayer() {
   }, [getHit, setDragging])
 
   // ── Funzioni di avvio drag ───────────────────────────────────
-
-  function startRotationDrag(e) {
-    e.stopPropagation()
-    // Piano orizzontale passante per l'altezza della torretta
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), -model.turret.pivotHeight)
-    activeDrag.current = { type: 'rotation', plane }
-    setDragging(true)
-  }
 
   function startBoomDrag(e) {
     e.stopPropagation()
@@ -470,13 +318,6 @@ function InteractiveLayer() {
     setDragging(true)
   }
 
-  function startOutriggerDrag(e, name, base) {
-    e.stopPropagation()
-    const plane = new THREE.Plane(new THREE.Vector3(0, 1, 0), 0)  // piano del suolo
-    activeDrag.current = { type: 'outrigger', plane, name, baseX: base.x }
-    setDragging(true)
-  }
-
   // ── Posizione punta braccio in world space ────────────────────
   const rotRad    = d2r(config.rotationDeg)
   const αRad      = d2r(config.mainBoomAngleDeg)
@@ -487,153 +328,17 @@ function InteractiveLayer() {
   const tipX      = Math.sin(rotRad) * tipHoriz
   const tipZ      = Math.cos(rotRad) * tipHoriz
 
-  const statusCol = statusColor(safety?.status ?? 'safe')
-
-  // ── Tooltip boom ─────────────────────────────────────────────
-  const boomLabel = [
-    `↕ ${Math.round(config.mainBoomAngleDeg)}°`,
-    `↔ ${config.mainBoomLengthM.toFixed(1)} m`,
-    safety ? `R ${safety.radiusM.toFixed(1)} m` : '',
-    safety ? `↑ ${safety.tipHeightM?.toFixed(1) ?? '—'} m` : '',
-  ].filter(Boolean).join('  ·  ')
-
   return (
     <>
-      {/* ── Anello di rotazione ────────────────────────────────── */}
-      <mesh
-        position={[0, pivH + 0.06, 0]}
-        rotation={[Math.PI / 2, 0, 0]}
-        onPointerDown={startRotationDrag}
-      >
-        <torusGeometry args={[1.5, 0.075, 12, 60]} />
-        <meshStandardMaterial color={ORANGE} metalness={0.3} roughness={0.4} />
-      </mesh>
-
-      {/* Label rotazione — ruota con la torretta */}
-      <group rotation={[0, -d2r(config.rotationDeg), 0]}>
-        <Html
-          position={[0, pivH - 0.55, 1.8]}
-          center
-          distanceFactor={14}
-          style={{ pointerEvents: 'none' }}
-        >
-          <Chip>↺ {Math.round(config.rotationDeg)}°</Chip>
-        </Html>
-      </group>
-
       {/* ── Handle punta braccio (invisibile — resta attivo per il drag) ── */}
       <mesh position={[tipX, tipHeight, tipZ]} onPointerDown={startBoomDrag}>
         <sphereGeometry args={[0.32, 16, 16]} />
         <meshStandardMaterial transparent opacity={0} depthWrite={false} />
       </mesh>
-
-      {/* HUD braccio — vicino alla punta */}
-      <Html
-        position={[tipX, tipHeight + 0.7, tipZ]}
-        center
-        distanceFactor={14}
-        style={{ pointerEvents: 'none' }}
-      >
-        <Chip accent>{boomLabel}</Chip>
-      </Html>
-
-      {/* SWL badge — vicino alla punta */}
-      {safety && (
-        <Html
-          position={[tipX, tipHeight - 0.6, tipZ]}
-          center
-          distanceFactor={14}
-          style={{ pointerEvents: 'none' }}
-        >
-          <SWLChip safety={safety} />
-        </Html>
-      )}
-
-      {/* ── Handles stabilizzatori ─────────────────────────────── */}
-      {Object.entries(model.outriggers.positions).map(([name, base]) => {
-        const ext    = config.outriggerExtensionM?.[name] ?? 0
-        const side   = Math.sign(base.x) || 1
-        const padX   = side * (Math.abs(base.x) + ext)
-        const react  = safety?.reactions?.find((r) => r.name === name)
-
-        return (
-          <group key={name}>
-            {/* Sfera drag pad */}
-            <mesh
-              position={[padX, 0.22, base.z]}
-              onPointerDown={(e) => startOutriggerDrag(e, name, base)}
-            >
-              <sphereGeometry args={[0.24, 14, 14]} />
-              <meshStandardMaterial
-                color={statusCol}
-                emissive={statusCol}
-                emissiveIntensity={0.3}
-                roughness={0.35}
-              />
-            </mesh>
-
-            {/* Label pad */}
-            {react && (
-              <Html
-                position={[padX, 0.65, base.z]}
-                center
-                distanceFactor={16}
-                style={{ pointerEvents: 'none' }}
-              >
-                <PadChip react={react} />
-              </Html>
-            )}
-          </group>
-        )
-      })}
     </>
   )
 }
 
-// ─────────────────────────────────────────────────────────────────
-// HUD chip components (HTML sovrapposto alla scena)
-// ─────────────────────────────────────────────────────────────────
-
-function Chip({ children, accent = false }) {
-  return (
-    <div
-      className={[
-        'px-2 py-1 rounded-md text-[11px] font-mono font-semibold shadow-sm whitespace-nowrap select-none',
-        'border border-line bg-white/92 text-black backdrop-blur-sm',
-        accent ? 'border-accent/40' : '',
-      ].join(' ')}
-    >
-      {children}
-    </div>
-  )
-}
-
-function SWLChip({ safety }) {
-  const util = safety.loadUtil
-  const pct  = Math.min(999, Math.round(util * 100))
-  const col  = util >= 1 ? '#dc2626' : util >= 0.85 ? '#b45309' : '#16a34a'
-  return (
-    <div
-      className="px-2 py-1 rounded-md text-[11px] font-mono font-bold shadow-sm whitespace-nowrap select-none border bg-white/92 backdrop-blur-sm"
-      style={{ borderColor: col, color: col }}
-    >
-      SWL {fmtKg(safety.swl_kg)} · {pct}%
-    </div>
-  )
-}
-
-function PadChip({ react }) {
-  const util  = react.utilization
-  const col   = util >= 1 ? '#dc2626' : util >= 0.85 ? '#b45309' : '#555555'
-  return (
-    <div
-      className="px-1.5 py-0.5 rounded text-[10px] font-mono shadow-sm whitespace-nowrap select-none border bg-white/90 backdrop-blur-sm"
-      style={{ color: col, borderColor: col + '60' }}
-    >
-      {react.reaction_kN.toFixed(1)} kN
-    </div>
-  )
-}
 
 // ─────────────────────────────────────────────────────────────────
 // Utility

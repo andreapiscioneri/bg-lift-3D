@@ -25,7 +25,20 @@
       "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5183/)",
       "Bash(pkill -f \"vite --port 5183\")",
       "Bash(pkill -f \"Google Chrome\")",
-      "Bash(npm run *)"
+      "Bash(npm run *)",
+      "Bash(find ~/.Trash -iname \"*assieme*\" -o -iname \"*braccio*\" 2>/dev/null; echo \"---trash---\"; find /Volumes -maxdepth 4 -iname \"*braccio*\" 2>/dev/null | head; echo \"---desktop/documents---\"; find ~/Desktop ~/Documents -iname \"*braccio*\" 2>/dev/null)",
+      "Read(//Volumes/**)",
+      "Bash(node scripts/convert-step.js \"/Users/andreapiscioneri/Desktop/LAVORO/BG LIFT/Assieme braccio/Assieme Braccio M250.STEP\" public/models/braccio-m250-hier.glb)",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\\\\n\" http://localhost:5183/models/braccio-m250.glb)",
+      "Bash(npx eslint *)",
+      "Bash(node explode-test.js)",
+      "Bash(node explode-per-part.js)",
+      "Bash(rm -f /tmp/explode-*.png /tmp/vite-dev.log /tmp/crane-explode0.png)",
+      "Bash(node full-control-test.js)",
+      "Bash(node debug-big-plate.js)",
+      "Bash(node verify-fix.js)",
+      "Bash(node verify-typed2.js)",
+      "Bash(node verify-safety-reactive.js)"
     ]
   }
 }

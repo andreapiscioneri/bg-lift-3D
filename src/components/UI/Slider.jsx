@@ -1,3 +1,5 @@
+import { useState, useEffect, useRef } from 'react'
+
 /**
  * Slider touch-friendly.
  * compact=true → etichette più piccole, thumb leggermente ridotto,
@@ -13,20 +15,73 @@ export default function Slider({
   onChange,
   disabled = false,
   compact = false,
+  defaultValue,
 }) {
+  const isModified = defaultValue !== undefined && Math.abs(value - defaultValue) > step / 2
   const formatted =
-    typeof value === 'number' ? value.toFixed(step < 1 ? 1 : 0) : value
+    typeof value === 'number' ? value.toFixed(step < 1 ? 1 : 0) : String(value)
+
+  // Il testo digitato vive in uno stato locale, scollegato dal valore
+  // "committato" finché l'utente sta scrivendo — altrimenti ogni carattere
+  // digitato triggererebbe un onChange che ri-renderizza il campo con il
+  // valore arrotondato/clampato, spezzando la digitazione (es. "-1.5" non
+  // riusciva mai a comparire perché il primo "-" veniva subito sovrascritto).
+  const [text, setText] = useState(formatted)
+  const isFocused = useRef(false)
+
+  useEffect(() => {
+    if (!isFocused.current) setText(formatted)
+  }, [formatted])
+
+  const commit = () => {
+    const parsed = parseFloat(text.replace(',', '.'))
+    if (Number.isNaN(parsed)) {
+      setText(formatted)
+      return
+    }
+    const clamped = Math.min(max, Math.max(min, parsed))
+    onChange(clamped)
+    setText(clamped.toFixed(step < 1 ? 1 : 0))
+  }
 
   return (
     <label className="block select-none w-full">
-      {/* Label + valore */}
-      <div className={`flex items-baseline justify-between ${compact ? 'mb-1' : 'mb-1.5'}`}>
+      {/* Azzera — sopra il valore (stessa colonna a destra), testo allineato a sinistra */}
+      {isModified && (
+        <div className="flex justify-end">
+          <button
+            type="button"
+            onClick={(e) => { e.preventDefault(); onChange(defaultValue) }}
+            className="text-[9px] font-semibold text-accent hover:underline text-left"
+          >
+            Azzera
+          </button>
+        </div>
+      )}
+
+      {/* Label + valore editabile */}
+      <div className={`flex items-baseline justify-between gap-2 ${compact ? 'mb-1' : 'mb-1.5'}`}>
         <span className={`font-semibold text-black ${compact ? 'text-xs' : 'text-sm'} truncate mr-2`}>
           {label}
         </span>
-        <span className={`font-mono font-bold text-accent flex-shrink-0 ${compact ? 'text-xs' : 'text-sm'}`}>
-          {formatted}
-          {unit && <span className="text-muted ml-0.5 font-medium">{unit}</span>}
+        <span className="flex items-baseline flex-shrink-0">
+          <input
+            type="text"
+            inputMode="decimal"
+            value={text}
+            disabled={disabled}
+            onChange={(e) => setText(e.target.value)}
+            onFocus={(e) => { isFocused.current = true; e.target.select() }}
+            onBlur={() => { isFocused.current = false; commit() }}
+            onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur() }}
+            className={[
+              'font-mono font-bold text-accent bg-transparent text-right border-b border-dashed border-accent/40',
+              'focus:outline-none focus:border-accent focus:border-solid',
+              'disabled:opacity-40 disabled:cursor-not-allowed',
+              compact ? 'text-xs w-11' : 'text-sm w-14',
+            ].join(' ')}
+          />
+          {unit && <span className="text-muted ml-0.5 font-medium text-xs">{unit}</span>}
         </span>
       </div>
 
