@@ -9,8 +9,24 @@ export const useCraneStore = create((set, get) => ({
   // --- Modello caricato ---
   model: BR0089,
 
+  // --- Progetto aperto (null = configuratore standalone) ---
+  projectId: null,
+
   // --- Configurazione corrente (clonata dal defaultConfiguration) ---
   config: { ...BR0089.defaultConfiguration },
+
+  /**
+   * Carica un progetto dal backend: i dati tecnici del modello arrivano dal
+   * DB (craneModel.data ha la stessa struttura di BR0089.json) e il glbUrl
+   * viene fuso nel model così la scena sa quale file 3D caricare.
+   */
+  loadProject: (project) =>
+    set({
+      projectId: project.id,
+      model: { ...project.craneModel.data, glbUrl: project.craneModel.glbUrl },
+      config: { ...(project.config ?? project.craneModel.data.defaultConfiguration) },
+      safety: null,
+    }),
 
   // --- Output dal worker ---
   safety: null,
@@ -18,27 +34,6 @@ export const useCraneStore = create((set, get) => ({
   // --- Drag interaction (disabilita OrbitControls durante direct manipulation) ---
   isDragging: false,
   setDragging: (v) => set({ isDragging: v }),
-
-  // --- Controllo manuale per singolo pezzo del modello CAD del braccio ---
-  // Chiave = nome reale del componente nel file STEP (es. "BR0089").
-  // Valore = { position: [x,y,z] in unità native del modello, rotation: [x,y,z] in gradi },
-  // entrambi relativi alla posizione/orientamento assemblato originale.
-  // La rotazione avviene attorno al baricentro del pezzo stesso.
-  partTransforms: {},
-  setPartAxis: (name, kind, axis, value) =>
-    set((s) => {
-      const current = s.partTransforms[name] ?? { position: [0, 0, 0], rotation: [0, 0, 0] }
-      const arr = [...current[kind]]
-      arr[axis] = value
-      return { partTransforms: { ...s.partTransforms, [name]: { ...current, [kind]: arr } } }
-    }),
-  resetPart: (name) =>
-    set((s) => {
-      const rest = { ...s.partTransforms }
-      delete rest[name]
-      return { partTransforms: rest }
-    }),
-  resetPartTransforms: () => set({ partTransforms: {} }),
 
   // --- Setter ---
   setConfig: (patch) =>
@@ -52,15 +47,34 @@ export const useCraneStore = create((set, get) => ({
       },
     })),
 
+  // Apertura (rotazione sull'asse verticale) di una singola gamba stabilizzatrice.
+  setOutriggerAngle: (name, valueDeg) =>
+    set((s) => ({
+      config: {
+        ...s.config,
+        outriggerAngleDeg: { ...s.config.outriggerAngleDeg, [name]: valueDeg },
+      },
+    })),
+
+  // Sollevamento verticale del piede di una singola gamba (0 = a terra).
+  setOutriggerFootLift: (name, valueM) =>
+    set((s) => ({
+      config: {
+        ...s.config,
+        outriggerFootLiftM: { ...s.config.outriggerFootLiftM, [name]: valueM },
+      },
+    })),
+
   setSafety: (safety) => set({ safety }),
 
   reset: () => set({ config: { ...get().model.defaultConfiguration }, safety: null }),
 
-  // Ripristina solo angolo/lunghezza sfilo/rotazione torretta ai valori di default,
-  // senza toccare gli altri campi di config (carico, jib, stabilizzatori).
+  // Ripristina solo angolo/lunghezza sfilo/angolo jib/rotazione torretta ai
+  // valori di default, senza toccare gli altri campi di config (carico,
+  // stabilizzatori).
   resetBoomConfig: () =>
     set((s) => {
-      const { mainBoomAngleDeg, mainBoomLengthM, rotationDeg } = get().model.defaultConfiguration
-      return { config: { ...s.config, mainBoomAngleDeg, mainBoomLengthM, rotationDeg } }
+      const { mainBoomAngleDeg, boomStrokeM, rotationDeg, jibAngleDeg, pressureBoreBar, pressureRodBar } = get().model.defaultConfiguration
+      return { config: { ...s.config, mainBoomAngleDeg, boomStrokeM, rotationDeg, jibAngleDeg, pressureBoreBar, pressureRodBar } }
     }),
 }))

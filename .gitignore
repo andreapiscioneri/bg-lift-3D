@@ -27,3 +27,6 @@ dist-ssr
 .env
 .env.local
 .env.*.local
+
+# File caricati dall'admin (modelli GLB)
+server/uploads/

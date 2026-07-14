@@ -1,11 +1,8 @@
 import fs from 'fs';
 import path from 'path';
-import { fileURLToPath } from 'url';
 import occtimportjs from 'occt-import-js';
 import * as THREE from 'three';
 import { GLTFExporter } from 'three/examples/jsm/exporters/GLTFExporter.js';
-
-const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // GLTFExporter's binary path uses FileReader, which doesn't exist in Node.
 globalThis.FileReader = class FileReader {

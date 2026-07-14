@@ -1,0 +1,60 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum CraneType {
+  CINGOLATA
+  RAGNO
+  AUTOCARRATA
+  TORRE
+}
+
+model User {
+  id           String    @id @default(cuid())
+  email        String    @unique
+  name         String
+  passwordHash String
+  role         Role      @default(USER)
+  active       Boolean   @default(true)
+  projects     Project[]
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+}
+
+model CraneModel {
+  id          String    @id @default(cuid())
+  code        String    @unique
+  name        String
+  type        CraneType
+  description String?
+  glbUrl      String
+  data        Json
+  active      Boolean   @default(true)
+  projects    Project[]
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+}
+
+model Project {
+  id           String     @id @default(cuid())
+  name         String
+  user         User       @relation(fields: [userId], references: [id], onDelete: Cascade)
+  userId       String
+  craneModel   CraneModel @relation(fields: [craneModelId], references: [id])
+  craneModelId String
+  config       Json?
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  @@index([userId])
+}

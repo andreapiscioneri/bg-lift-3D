@@ -33,8 +33,8 @@ export default function App() {
 
   return (
     <div
-      className="w-screen overflow-hidden flex bg-white"
-      style={{ height: '100dvh', flexDirection: useSheet ? 'column' : 'row' }}
+      className="w-full h-full overflow-hidden flex bg-white"
+      style={{ flexDirection: useSheet ? 'column' : 'row' }}
     >
       {/* ── Scena 3D ─────────────────────────────────────────────── */}
       <div className="relative flex-1 min-w-0 min-h-0" style={sceneStyle}>

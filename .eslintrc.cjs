@@ -18,4 +18,20 @@ module.exports = {
     ],
     'react/prop-types': 'off',
   },
+  overrides: [
+    {
+      files: ['server/**/*.js', 'prisma/**/*.js', 'scripts/**/*.js'],
+      env: { node: true, browser: false },
+    },
+    {
+      // react-three-fiber usa prop JSX proprie di three.js (position, args…)
+      files: ['src/components/3D/**/*.jsx'],
+      rules: { 'react/no-unknown-property': 'off' },
+    },
+    {
+      // Provider/hook e bootstrap del router esportano più di soli componenti
+      files: ['src/auth/AuthContext.jsx', 'src/main.jsx'],
+      rules: { 'react-refresh/only-export-components': 'off' },
+    },
+  ],
 }

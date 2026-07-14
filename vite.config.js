@@ -7,6 +7,10 @@ export default defineConfig({
   server: {
     host: true, // espone il dev server su rete locale → utile per test su smartphone
     port: 5173,
+    proxy: {
+      '/api': 'http://localhost:3001',
+      '/uploads': 'http://localhost:3001',
+    },
   },
   worker: {
     format: 'es',

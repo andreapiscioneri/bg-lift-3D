@@ -1,15 +1,15 @@
 /**
- * Web Worker — calcoli di sicurezza BGLift BR0089.
+ * Web Worker — calcoli di sicurezza BGLift BR0089 / M250.
  *
  * Modello fisico:
- *  • Corpo rigido in equilibrio statico (EN 13000 semplificato)
- *  • Interpolazione bilineare sulla tabella SWL caricata dal JSON ufficiale
- *  • Distribuzione reazioni su 4 stabilizzatori: piastra rigida su 4 molle (Winkler)
+ *  • Carico sollevato (limite idraulico): formule e costanti riprodotte 1:1
+ *    dall'Excel BGLift "Calcolo carico sollevato M250" (vedi
+ *    model.liftCalculation in BR0089.json) — equilibrio dei momenti attorno
+ *    alla cerniera torre/braccio O: (braccio_cilindri × forza_cilindri −
+ *    momento_pesi_propri) / distanza_orizzontale_gancio.
+ *  • Distribuzione reazioni su 4 stabilizzatori: piastra rigida su 4 molle
+ *    (Winkler) — ancora approssimata, NON da documenti BGLift.
  *  • Fattore dinamico φ = 1.10 applicato al carico (EN 13000 §3.3)
- *  • Fattori di sicurezza al ribaltamento e strutturali letti dal JSON
- *
- * Nota: sostituire swl_kg nel file BR0089.json con i valori ufficiali BGLift
- * prima di qualsiasi utilizzo operativo in cantiere.
  */
 
 import * as Comlink from 'comlink'
@@ -22,82 +22,80 @@ const DEG2RAD = Math.PI / 180
 const d2r = (d) => d * DEG2RAD
 const clamp = (v, lo, hi) => Math.max(lo, Math.min(hi, v))
 
-function lerp(a, b, t) { return a + (b - a) * t }
+// ─────────────────────────────────────────────────────────────────
+// Carico sollevato — formule dell'Excel BGLift (celle C34..C39)
+// ─────────────────────────────────────────────────────────────────
 
 /**
- * Trova l'intervallo [i, i+1] in un array monotono crescente tale che
- * xs[i] <= x <= xs[i+1]. Restituisce anche t ∈ [0,1] per l'interpolazione.
+ * Riproduce il foglio "Carico sollevato": coordinate in mm nel piano
+ * verticale del braccio, origine O = cerniera torre/braccio, braccio a 0°.
+ * Ingressi variabili (come nell'Excel): angolo braccio (°), corsa dei
+ * cilindri di sfilo (mm, uguale per le 3 sezioni mobili; il gancio avanza di
+ * 3 × corsa) e pressioni fondello/stelo (bar).
  */
-function bracketAsc(xs, x) {
-  if (x <= xs[0])               return { i: 0, t: 0 }
-  if (x >= xs[xs.length - 1])  return { i: xs.length - 2, t: 1 }
-  for (let i = 0; i < xs.length - 1; i++) {
-    if (x >= xs[i] && x <= xs[i + 1]) {
-      return { i, t: (x - xs[i]) / (xs[i + 1] - xs[i]) }
-    }
+function computeLiftCapacity(angleDeg, strokeMm, L, pressures = {}) {
+  const α = d2r(angleDeg)
+  const s = clamp(strokeMm, 0, L.strokeMax_mm)
+
+  // C34 — braccio dei cilindri: distanza di O dalla retta per A (cerniera
+  // torre/cilindri, fissa) e B' (cerniera braccio/cilindri ruotata di α).
+  const [ax, ay] = L.cylTurret_mm
+  const [bx, by] = L.cylBoom_mm
+  const rB = Math.hypot(bx, by)
+  const aB = Math.atan(by / bx)
+  const bxr = rB * Math.cos(α + aB)
+  const byr = rB * Math.sin(α + aB)
+  const slope = (ay - byr) / (ax - bxr)
+  const cylArm_mm = Math.abs(ay - slope * ax) / Math.sqrt(1 + slope * slope)
+
+  // C35 — forza dei cilindri di sollevamento (kg): spinta al fondello meno
+  // contropressione sulla corona lato stelo. Pressioni dalla configurazione
+  // corrente, con fallback ai valori nominali del modello.
+  const { count, bore_mm, rod_mm, pressureBore_bar, pressureRod_bar } = L.cylinders
+  const pBore = pressures.boreBar ?? pressureBore_bar
+  const pRod = pressures.rodBar ?? pressureRod_bar
+  const rb = bore_mm / 2, rr = rod_mm / 2
+  const cylForce_kg =
+    count * ((rb * rb * Math.PI * pBore) -
+             ((rb * rb - rr * rr) * Math.PI * pRod)) / (10 * 9.81)
+
+  // C36 — momento dei pesi propri (kg·mm): ogni sezione col proprio
+  // baricentro, traslato di extendsWithStroke × corsa lungo il braccio.
+  let selfMoment_kgmm = 0
+  for (const sec of L.sections) {
+    const x = sec.cg_mm[0] + sec.extendsWithStroke * s
+    const y = sec.cg_mm[1]
+    selfMoment_kgmm += Math.hypot(x, y) * Math.cos(α + Math.atan(y / x)) * sec.mass_kg
   }
-  return { i: 0, t: 0 }
-}
 
-/**
- * Trova l'intervallo in un array monotono DECRESCENTE (come angles_deg).
- */
-function bracketDesc(xs, x) {
-  if (x >= xs[0])               return { i: 0, t: 0 }
-  if (x <= xs[xs.length - 1])  return { i: xs.length - 2, t: 1 }
-  for (let i = 0; i < xs.length - 1; i++) {
-    const hi = xs[i], lo = xs[i + 1]
-    if (x <= hi && x >= lo) {
-      return { i, t: (hi - x) / (hi - lo) }
-    }
-  }
-  return { i: 0, t: 0 }
+  // C37 — distanza orizzontale del gancio da O (mm).
+  const hx = L.hook_mm[0] + L.hookExtendsWithStroke * s
+  const hy = L.hook_mm[1]
+  const hookHoriz_mm = Math.hypot(hx, hy) * Math.cos(α + Math.atan(hy / hx))
+  // Proiezione verticale del gancio rispetto a O (non nell'Excel; serve solo
+  // per l'altezza punta nell'HUD).
+  const hookVert_mm = Math.hypot(hx, hy) * Math.sin(α + Math.atan(hy / hx))
+
+  // C39 — carico sollevato (kg).
+  const capacity_kg = (cylArm_mm * cylForce_kg - selfMoment_kgmm) / hookHoriz_mm
+
+  return { capacity_kg, hookHoriz_mm, hookVert_mm, cylArm_mm, cylForce_kg, selfMoment_kgmm }
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Tabella SWL — interpolazione bilineare (angolo × raggio)
+// Cinematica — raggio di lavoro e altezza gancio
 // ─────────────────────────────────────────────────────────────────
 
 /**
- * Restituisce la portata sicura SWL in kg per la coppia (angleDeg, radiusM).
- * angles_deg decrescente, radii_m crescente, swl_kg[angleIdx][radiusIdx].
- */
-function interpolateSWL(loadChart, angleDeg, radiusM) {
-  const { angles_deg, radii_m, swl_kg } = loadChart
-
-  const a = bracketDesc(angles_deg, angleDeg)
-  const r = bracketAsc(radii_m, radiusM)
-
-  const q11 = swl_kg[a.i    ][r.i    ]
-  const q12 = swl_kg[a.i    ][r.i + 1]
-  const q21 = swl_kg[a.i + 1][r.i    ]
-  const q22 = swl_kg[a.i + 1][r.i + 1]
-
-  return Math.max(0, lerp(lerp(q11, q12, r.t), lerp(q21, q22, r.t), a.t))
-}
-
-// ─────────────────────────────────────────────────────────────────
-// Cinematica — raggio di lavoro
-// ─────────────────────────────────────────────────────────────────
-
-/**
- * Raggio di lavoro orizzontale R dal centro di rotazione della torretta
- * al punto di sospensione del carico (gancio o punta Jib).
- *
- * Geometria:
- *   pivot = (0, pivotHeight, pivotZ) nel frame terreno con rotazione=0
- *   tip   = pivot + boomLen*(sin(rot)*cos(α), sin(α), cos(rot)*cos(α))
- *   R = sqrt(tip.x² + tip.z²) = pivotZ + boomLen*cos(α)   [invariante rispetto a rot]
+ * Raggio orizzontale dal centro ralla al gancio (o alla punta del jib).
+ * La cerniera O sta pivot.z metri rispetto all'asse ralla (negativo =
+ * arretrata); la distanza orizzontale O→gancio viene dal calcolo Excel.
  *
  * Con Jib articolato:
  *   αjib_assoluto = α_braccio - δjib   (δjib positivo = piega giù rispetto al braccio)
- *   ΔR_jib = jibLen * cos(αjib)
  */
-function computeWorkingRadius(state, model) {
-  const α     = d2r(state.mainBoomAngleDeg)
-  const pivZ  = model.mainBoom.pivot.z        // 0.6 m avanti rispetto al centro torretta
-
-  let R = pivZ + state.mainBoomLengthM * Math.cos(α)
+function computeWorkingRadius(state, model, lift) {
+  let R = model.mainBoom.pivot.z + lift.hookHoriz_mm / 1000
 
   if (model.jib?.available && state.jibLengthM > 0) {
     const αJib = d2r(state.mainBoomAngleDeg - state.jibAngleDeg)
@@ -108,14 +106,10 @@ function computeWorkingRadius(state, model) {
 }
 
 /**
- * Altezza della punta del braccio (o Jib) sopra il suolo.
- * Non usata per SWL ma esposta per HUD e debug.
+ * Altezza del gancio (o punta Jib) sopra il suolo — per HUD e debug.
  */
-function computeTipHeight(state, model) {
-  const α    = d2r(state.mainBoomAngleDeg)
-  const pivH = model.turret.pivotHeight        // 1.65 m
-
-  let h = pivH + state.mainBoomLengthM * Math.sin(α)
+function computeTipHeight(state, model, lift) {
+  let h = model.mainBoom.pivot.y + lift.hookVert_mm / 1000
 
   if (model.jib?.available && state.jibLengthM > 0) {
     const αJib = d2r(state.mainBoomAngleDeg - state.jibAngleDeg)
@@ -170,7 +164,7 @@ function computeOutriggerReactions(state, model, radiusM) {
   const φ            = stabilityLimits.maxDynamicLoadFactor   // 1.10
   const mChassis     = chassis.totalMass
   const mTurret      = turret.mass                             // include contrappeso
-  const mBoom        = mainBoom.sectionMass.reduce((s, m) => s + m, 0)
+  const mBoom        = model.liftCalculation.sections.reduce((s, sec) => s + sec.mass_kg, 0)
   const mJib         = (jib?.available && state.jibLengthM > 0) ? jib.mass : 0
   const mLoad        = state.loadKg * φ                        // carico amplificato
   const mTotal       = mChassis + mTurret + mBoom + mJib + mLoad
@@ -179,8 +173,8 @@ function computeOutriggerReactions(state, model, radiusM) {
   const rotRad  = d2r(state.rotationDeg)
   const sinRot  = Math.sin(rotRad)
   const cosRot  = Math.cos(rotRad)
-  const α       = d2r(state.mainBoomAngleDeg)
-  const boomH   = state.mainBoomLengthM * Math.cos(α)    // proiezione orizzontale
+  // Proiezione orizzontale del braccio ≈ raggio di lavoro (gancio).
+  const boomH   = radiusM
 
   // Chassis: fisso
   const cgChassis = { x: chassis.centerOfGravity.x, z: chassis.centerOfGravity.z }
@@ -257,9 +251,16 @@ const api = {
    * @returns {object}
    */
   computeSafety(state, model) {
-    const radiusM  = computeWorkingRadius(state, model)
-    const tipHeightM = computeTipHeight(state, model)
-    const swl_kg   = interpolateSWL(model.loadChart, state.mainBoomAngleDeg, radiusM)
+    // Formule Excel BGLift: angolo braccio + corsa cilindri sfilo → carico max.
+    const lift = computeLiftCapacity(
+      state.mainBoomAngleDeg,
+      (state.boomStrokeM ?? 0) * 1000,
+      model.liftCalculation,
+      { boreBar: state.pressureBoreBar, rodBar: state.pressureRodBar },
+    )
+    const radiusM  = computeWorkingRadius(state, model, lift)
+    const tipHeightM = computeTipHeight(state, model, lift)
+    const swl_kg   = Math.max(0, lift.capacity_kg)
 
     // Utilizzo del carico (senza φ — il carico reale vs SWL nominale)
     const loadUtil = swl_kg > 0 ? state.loadKg / swl_kg : Infinity

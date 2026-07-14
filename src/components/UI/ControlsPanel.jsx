@@ -1,30 +1,17 @@
-import { useState } from 'react'
 import { useCraneStore } from '../../store/craneStore'
 import Slider from './Slider'
 import StatusBadge from './StatusBadge'
-import { fmtM, fmtPct } from '../../utils/format'
-import { BOOM_PART_NAMES, RAM_PART_NAME, BOOM_NATIVE_LENGTH } from '../3D/CraneScene'
+import { fmtM } from '../../utils/format'
+import { LEG_OPEN_DEG, FOOT_LIFT_MAX } from '../3D/CraneScene'
 
-// Range e step (in metri) per gli slider Pos. X/Z di ogni pezzo — stesso
-// range relativo che avevano prima in unità native, solo espresso in un'unità
-// fisica reale e leggibile invece dell'unità interna del motore 3D.
-const PART_POS_RANGE_M = 5
-const PART_POS_STEP_M = 0.05
-
-const AXIS_LABELS = ['X', 'Y', 'Z']
-
-// Etichette leggibili per i componenti reali dell'assieme CAD (nomi come nel file STEP).
-const BOOM_PART_LABELS = {
-  BR0089:         'Piastra cassone 1 (BR0089)',
-  BR0007:         'Piastra cassone 2 (BR0007)',
-  BR0008:         'Piastra cassone 3 (BR0008)',
-  BR0009:         'Piastra cassone 4 (BR0009)',
-  CR0082:         'Testa/puleggia (CR0082)',
-  MR0003S_Chiuso: 'Martinetto idraulico (MR0003S)',
-  GA0001:         'Perno base (GA0001)',
-  BC0040:         'Boccola base (BC0040)',
-  PR0038:         'Piastra attacco base (PR0038)',
-}
+// Gambe stabilizzatrici: apertura 0° = ripiegata lungo l'asse macchina,
+// LEG_OPEN_DEG = tutta aperta a ragno (posa CAD). "Anteriore" = lato punta braccio.
+const LEG_LABELS = [
+  ['frontLeft',  'Ant. sinistra'],
+  ['frontRight', 'Ant. destra'],
+  ['rearLeft',   'Post. sinistra'],
+  ['rearRight',  'Post. destra'],
+]
 
 /**
  * Pannello laterale / contenuto del bottom sheet.
@@ -40,18 +27,8 @@ export default function ControlsPanel({ size = 'lg' }) {
   const setConfig          = useCraneStore((s) => s.setConfig)
   const reset              = useCraneStore((s) => s.reset)
   const resetBoomConfig    = useCraneStore((s) => s.resetBoomConfig)
-  const partTransforms     = useCraneStore((s) => s.partTransforms)
-  const setPartAxis        = useCraneStore((s) => s.setPartAxis)
-  const resetPart          = useCraneStore((s) => s.resetPart)
-  const resetPartTransforms = useCraneStore((s) => s.resetPartTransforms)
-
-  const [expanded, setExpanded] = useState(() => new Set())
-  const togglePart = (name) =>
-    setExpanded((prev) => {
-      const next = new Set(prev)
-      next.has(name) ? next.delete(name) : next.add(name)
-      return next
-    })
+  const setOutriggerAngle  = useCraneStore((s) => s.setOutriggerAngle)
+  const setOutriggerFootLift = useCraneStore((s) => s.setOutriggerFootLift)
 
   const xs = size === 'xs'
   const lg = size === 'lg'
@@ -60,17 +37,6 @@ export default function ControlsPanel({ size = 'lg' }) {
   const gap  = xs ? 'gap-3' : lg ? 'gap-5'  : 'gap-4'
   const sGap = xs ? 'gap-2' : lg ? 'gap-3'  : 'gap-2.5'
   const compact = !lg  // slider/pad compact se non desktop
-
-  // "Lunghezza sfilo" e la Pos. Y del martinetto sono la stessa identica
-  // grandezza (config.mainBoomLengthM), mostrata qui nella stessa identica
-  // unità e range in entrambi i punti del pannello — la conversione in
-  // unità native del modello 3D avviene solo dentro CraneScene.jsx per il
-  // rendering, mai in questa UI.
-  //
-  // Stesso principio per Pos. X/Y/Z di ogni pezzo: il modello CAD lavora in
-  // "unità native" pre-scala, ma qui mostriamo sempre metri reali — l'utente
-  // non deve mai vedere un'unità di misura senza significato fisico.
-  const partScale = model.mainBoom.retractedLength / BOOM_NATIVE_LENGTH
 
   return (
     <div className={`flex flex-col h-full overflow-y-auto bg-white`}>
@@ -126,14 +92,47 @@ export default function ControlsPanel({ size = 'lg' }) {
           compact={compact}
         />
         <Slider
-          label="Lunghezza sfilo"
+          label="Corsa sfilo"
           unit="m"
-          min={model.mainBoom.retractedLength}
-          max={model.mainBoom.extendedLength}
-          step={0.1}
-          value={config.mainBoomLengthM}
-          defaultValue={model.defaultConfiguration.mainBoomLengthM}
-          onChange={(v) => setConfig({ mainBoomLengthM: v })}
+          min={0}
+          max={model.mainBoom.strokeMaxM}
+          step={0.05}
+          value={config.boomStrokeM}
+          defaultValue={model.defaultConfiguration.boomStrokeM}
+          onChange={(v) => setConfig({ boomStrokeM: v })}
+          compact={compact}
+        />
+        <Slider
+          label="Pressione fondello"
+          unit="bar"
+          min={0}
+          max={model.liftCalculation.cylinders.pressureBoreMax_bar}
+          step={5}
+          value={config.pressureBoreBar}
+          defaultValue={model.defaultConfiguration.pressureBoreBar}
+          onChange={(v) => setConfig({ pressureBoreBar: v })}
+          compact={compact}
+        />
+        <Slider
+          label="Pressione stelo"
+          unit="bar"
+          min={0}
+          max={model.liftCalculation.cylinders.pressureRodMax_bar}
+          step={5}
+          value={config.pressureRodBar}
+          defaultValue={model.defaultConfiguration.pressureRodBar}
+          onChange={(v) => setConfig({ pressureRodBar: v })}
+          compact={compact}
+        />
+        <Slider
+          label="Angolo jib"
+          unit="°"
+          min={model.jib.articulationRangeDeg[0]}
+          max={model.jib.articulationRangeDeg[1]}
+          step={1}
+          value={config.jibAngleDeg}
+          defaultValue={model.defaultConfiguration.jibAngleDeg}
+          onChange={(v) => setConfig({ jibAngleDeg: v })}
           compact={compact}
         />
         <Slider
@@ -153,38 +152,42 @@ export default function ControlsPanel({ size = 'lg' }) {
             <span className="font-bold text-accent">{fmtM(safety.radiusM)}</span>
           </div>
         )}
+      </Section>
 
-        {/* Controllo manuale del modello CAD — posizione e rotazione per ogni pezzo reale */}
-        <div className="flex items-center justify-between mt-1 pt-2 border-t border-line">
-          <span className="text-[10px] text-muted">Modello CAD — posizione/rotazione per componente</span>
-          <button
-            onClick={resetPartTransforms}
-            className="text-[10px] font-semibold text-accent hover:underline flex-shrink-0"
-          >
-            Riassembla tutto
-          </button>
-        </div>
-        <div className="flex flex-col gap-1.5">
-          {BOOM_PART_NAMES.map((name) => (
-            <PartAccordion
-              key={name}
-              name={name}
-              label={BOOM_PART_LABELS[name] ?? name}
-              isOpen={expanded.has(name)}
-              onToggle={() => togglePart(name)}
-              transform={partTransforms[name]}
-              setAxis={setPartAxis}
-              onReset={() => resetPart(name)}
+      {/* Gambe stabilizzatrici — apertura e altezza piede per singola gamba */}
+      <Section title="Stabilizzatori" gap={sGap}>
+        {LEG_LABELS.map(([name, label]) => (
+          <div key={name} className="flex flex-col gap-2 pb-2 border-b border-line last:border-b-0">
+            <Slider
+              label={`${label} — apertura`}
+              unit="°"
+              min={0}
+              max={LEG_OPEN_DEG}
+              step={1}
+              value={config.outriggerAngleDeg?.[name] ?? LEG_OPEN_DEG}
+              defaultValue={model.defaultConfiguration.outriggerAngleDeg[name]}
+              onChange={(v) => setOutriggerAngle(name, v)}
               compact={compact}
-              isRam={name === RAM_PART_NAME}
-              mainBoom={model.mainBoom}
-              mainBoomLengthM={config.mainBoomLengthM}
-              defaultMainBoomLengthM={model.defaultConfiguration.mainBoomLengthM}
-              setConfig={setConfig}
-              partScale={partScale}
             />
-          ))}
-        </div>
+            <Slider
+              label={`${label} — alt. piede`}
+              unit="m"
+              min={0}
+              max={FOOT_LIFT_MAX}
+              step={0.01}
+              value={config.outriggerFootLiftM?.[name] ?? 0}
+              defaultValue={model.defaultConfiguration.outriggerFootLiftM[name]}
+              onChange={(v) => setOutriggerFootLift(name, v)}
+              compact={compact}
+            />
+          </div>
+        ))}
+        <p className="text-[10px] text-muted leading-snug">
+          Apertura: 0° = gamba ripiegata lungo il carro, {LEG_OPEN_DEG}° = tutta aperta.
+          Alt. piede: 0 = piede a terra, valori positivi = piede sollevato.
+          Per ora entrambi sono solo visivi: il calcolo di stabilità usa ancora
+          l&apos;estensione stabilizzatori della configurazione.
+        </p>
       </Section>
 
       {/* Disclaimer */}
@@ -211,96 +214,6 @@ function Section({ title, action, children, gap = 'gap-3' }) {
       </div>
       {children}
     </section>
-  )
-}
-
-
-// Pannello a fisarmonica per un singolo pezzo: posizione X/Y/Z (in metri
-// reali — convertita da/verso le unità native del modello 3D) e rotazione
-// X/Y/Z (gradi, attorno al baricentro del pezzo). Per il martinetto (isRam)
-// la Pos. Y è la stessa identica grandezza di "Lunghezza sfilo" in cima al
-// pannello — stessa unità (m) e stesso range: modificabile da qui, aggiorna
-// anche lo slider in alto (e viceversa).
-function PartAccordion({
-  name, label, isOpen, onToggle, transform, setAxis, onReset, compact,
-  isRam, mainBoom, mainBoomLengthM, defaultMainBoomLengthM, setConfig, partScale,
-}) {
-  const position = transform?.position ?? [0, 0, 0]
-  const rotation = transform?.rotation ?? [0, 0, 0]
-  const isModified = Boolean(transform)
-
-  return (
-    <div className="rounded-lg border border-line overflow-hidden">
-      <button
-        onClick={onToggle}
-        className="w-full flex items-center justify-between gap-2 px-2.5 py-2 bg-white hover:bg-black/[0.03] transition-colors text-left"
-      >
-        <span className="text-xs font-semibold text-black truncate flex items-center gap-1.5">
-          {isModified && <span className="w-1.5 h-1.5 rounded-full bg-accent flex-shrink-0" />}
-          {label}
-        </span>
-        <span className="text-muted text-xs flex-shrink-0">{isOpen ? '▲' : '▼'}</span>
-      </button>
-
-      {isOpen && (
-        <div className="px-2.5 py-2.5 border-t border-line flex flex-col gap-2.5 bg-black/[0.015]">
-          <div className="flex items-center justify-between">
-            <span className="text-[9px] uppercase tracking-wide text-muted font-semibold">Posizione</span>
-            <button onClick={onReset} className="text-[10px] font-semibold text-accent hover:underline">
-              Reset pezzo
-            </button>
-          </div>
-          {AXIS_LABELS.map((axisLabel, axis) => {
-            if (isRam && axis === 1) {
-              return (
-                <Slider
-                  key="pos-1"
-                  label="Pos. Y (= Lunghezza sfilo)"
-                  unit="m"
-                  min={mainBoom.retractedLength}
-                  max={mainBoom.extendedLength}
-                  step={0.1}
-                  value={mainBoomLengthM}
-                  defaultValue={defaultMainBoomLengthM}
-                  onChange={(v) => setConfig({ mainBoomLengthM: v })}
-                  compact={compact}
-                />
-              )
-            }
-            return (
-              <Slider
-                key={`pos-${axis}`}
-                label={`Pos. ${axisLabel}`}
-                unit="m"
-                min={-PART_POS_RANGE_M}
-                max={PART_POS_RANGE_M}
-                step={PART_POS_STEP_M}
-                value={position[axis] * partScale}
-                defaultValue={0}
-                onChange={(v) => setAxis(name, 'position', axis, v / partScale)}
-                compact={compact}
-              />
-            )
-          })}
-
-          <span className="text-[9px] uppercase tracking-wide text-muted font-semibold mt-1">Rotazione</span>
-          {AXIS_LABELS.map((axisLabel, axis) => (
-            <Slider
-              key={`rot-${axis}`}
-              label={`Rot. ${axisLabel}`}
-              unit="°"
-              min={-180}
-              max={180}
-              step={1}
-              value={rotation[axis]}
-              defaultValue={0}
-              onChange={(v) => setAxis(name, 'rotation', axis, v)}
-              compact={compact}
-            />
-          ))}
-        </div>
-      )}
-    </div>
   )
 }
 
