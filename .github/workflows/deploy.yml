@@ -1,0 +1,78 @@
+name: Deploy · lift.bglift.com
+
+# Deploy automatico della webapp sul server 167.86.73.223 ad ogni push su main.
+# Meccanismo: rsync del codice in /opt/bglift, poi `docker compose up -d --build`
+# sul server (stessa procedura del deploy manuale iniziale).
+#
+# Secret richiesti (repo → Settings → Secrets and variables → Actions):
+#   DEPLOY_SSH_KEY      chiave privata ed25519 della deploy key
+#   DEPLOY_KNOWN_HOSTS  output di ssh-keyscan del server
+#   DEPLOY_HOST         167.86.73.223
+#   DEPLOY_USER         root
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}   # avvio manuale dalla tab Actions
+
+# Un deploy alla volta; non annullare quello in corso (evita stati a metà).
+concurrency:
+  group: deploy-lift-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configura SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Sync codice sul server
+        env:
+          TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+        # --delete tiene pulito l'albero, ma deploy/.env (segreti di produzione)
+        # e server/uploads sono ESCLUSI → non vengono mai toccati/cancellati.
+        run: |
+          rsync -az --delete \
+            --exclude '/node_modules' \
+            --exclude '/dist' \
+            --exclude '/.git' \
+            --exclude '/server/uploads' \
+            --exclude '/deploy/.env' \
+            --exclude '*.STEP' --exclude '*.step' \
+            -e "ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts" \
+            ./ "$TARGET:/opt/bglift/"
+
+      - name: Build & restart (docker compose)
+        env:
+          TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts "$TARGET" '
+            set -e
+            cd /opt/bglift/deploy
+            docker compose -f docker-compose.prod.yml --env-file .env up -d --build --remove-orphans
+            docker image prune -f
+          '
+
+      - name: Health check
+        env:
+          TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts "$TARGET" '
+            for i in $(seq 1 30); do
+              code=$(curl -s -m 5 -o /dev/null -w "%{http_code}" http://127.0.0.1:3001/api/health || echo 000)
+              if [ "$code" = "200" ]; then echo "health OK ($code)"; exit 0; fi
+              sleep 4
+            done
+            echo "health check FALLITO"; docker logs bglift-app --tail 40; exit 1
+          '

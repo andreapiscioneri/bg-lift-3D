@@ -11,12 +11,12 @@ const createSchema = z.object({
   email: z.string().email(),
   name: z.string().min(1),
   password: z.string().min(6),
-  role: z.enum(['USER', 'ADMIN']).optional(),
+  role: z.enum(['USER', 'TECNICO', 'ADMIN']).optional(),
 })
 
 const updateSchema = z.object({
   name: z.string().min(1).optional(),
-  role: z.enum(['USER', 'ADMIN']).optional(),
+  role: z.enum(['USER', 'TECNICO', 'ADMIN']).optional(),
   active: z.boolean().optional(),
   password: z.string().min(6).optional(),
 })
@@ -51,7 +51,7 @@ router.patch('/:id', async (req, res) => {
   if (!target) return res.status(404).json({ error: 'Utente non trovato' })
 
   // Un admin non può auto-degradarsi o auto-disattivarsi: evita lockout.
-  if (target.id === req.user.id && (parsed.data.role === 'USER' || parsed.data.active === false)) {
+  if (target.id === req.user.id && ((parsed.data.role && parsed.data.role !== 'ADMIN') || parsed.data.active === false)) {
     return res.status(400).json({ error: 'Non puoi disattivare o degradare il tuo stesso account' })
   }
 

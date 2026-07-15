@@ -6,9 +6,10 @@ import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import ConfiguratorPage from './pages/ConfiguratorPage'
 import AdminPage from './pages/admin/AdminPage'
+import TecnicoPage from './pages/TecnicoPage'
 import './index.css'
 
-function Protected({ children, adminOnly = false }) {
+function Protected({ children, roles = null }) {
   const { user, loading } = useAuth()
   const location = useLocation()
 
@@ -20,7 +21,7 @@ function Protected({ children, adminOnly = false }) {
     )
   }
   if (!user) return <Navigate to="/login" state={{ from: location.pathname }} replace />
-  if (adminOnly && user.role !== 'ADMIN') return <Navigate to="/" replace />
+  if (roles && !roles.includes(user.role)) return <Navigate to="/" replace />
   return children
 }
 
@@ -32,7 +33,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="/login" element={<LoginPage />} />
           <Route path="/" element={<Protected><DashboardPage /></Protected>} />
           <Route path="/projects/:id" element={<Protected><ConfiguratorPage /></Protected>} />
-          <Route path="/admin/*" element={<Protected adminOnly><AdminPage /></Protected>} />
+          <Route path="/tecnico" element={<Protected roles={['TECNICO', 'ADMIN']}><TecnicoPage /></Protected>} />
+          <Route path="/admin/*" element={<Protected roles={['ADMIN']}><AdminPage /></Protected>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>

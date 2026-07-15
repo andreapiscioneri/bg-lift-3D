@@ -11,15 +11,19 @@ import { useCraneStore } from '../../store/craneStore'
 // I nomi nel GLB contengono spazi; GLTFLoader li converte in underscore.
 // ─────────────────────────────────────────────────────────────────
 
+// I nomi dei nodi sono prefissi: la variante senza jib si chiama
+// "Assieme_parte_aerea_M250_senza_Jib" e viene trovata per startsWith.
 const MACHINE_MODEL_URL = '/models/m250.glb'
 const MACHINE_AEREA_NODE = 'Assieme_parte_aerea_M250'
 const MACHINE_BASSA_NODE = 'Assieme_parte_bassa_M250'
 // Quota minima nativa (appoggio cingoli a y = -2.04) — serve per posare la macchina a terra.
 const MACHINE_GROUND_Y = -2.04
-// Asse ralla stimato (X,Z nativi): centro XZ del carro; Z coincide col piano
-// di simmetria del braccio (mesh LM03xx tutte centrate a z = -0.27). Da tarare
-// se la rotazione torretta risultasse eccentrica.
-const MACHINE_SLEW_X = -2.66
+// Asse ralla (X,Z nativi). X dal DWG "Calcolo carico sollevato M250": il
+// centro di rotazione sta 690 mm davanti alla cerniera torre/braccio O
+// (quota 690 tra O e l'asse ralla, catena 8422,54 = 9112,54 − 690), quindi
+// X = BOOM_PIN.x + 0.69. Z coincide col piano di simmetria del braccio
+// (mesh LM03xx tutte centrate a z = -0.27).
+const MACHINE_SLEW_X = -2.76
 const MACHINE_SLEW_Z = -0.27
 
 // ── Cinematica braccio/jib (coordinate native XY, il braccio giace nel piano
@@ -33,11 +37,16 @@ const MACHINE_SLEW_Z = -0.27
 const BOOM_PIN = [-3.45, 0.05]
 // Perno jib: boccole LM0356/LM0358 sulla testa del braccio.
 const JIB_PIN = [-0.72, 1.58]
-// Inclinazione del braccio nella posa CAD = atan2(JIB_PIN-BOOM_PIN) ≈ 29.3°.
-// Nella posa CAD il jib è orizzontale, quindi la sua piega relativa al
-// braccio coincide con lo stesso valore.
-const BOOM_CAD_ANGLE_DEG = 29.3
-const JIB_CAD_BEND_DEG = 29.3
+// Inclinazione del braccio nella posa CAD. L'angolo braccio dell'Excel/DWG è
+// riferito all'asse di SCORRIMENTO degli sfili (le sezioni traslano di s lungo
+// x nel foglio), non alla linea O→perno jib (~29.3°, che sta sotto l'asse come
+// il gancio a -372 mm). PCA sulle piastre lunghe LM0286..LM0327: 36.08° medio
+// (spread 35.6–36.9). Con 36.0 l'angolo visuale coincide con l'α dell'Excel.
+const BOOM_CAD_ANGLE_DEG = 36.0
+// Piega jib nella posa CAD = angolo braccio CAD − assetto jib CAD. I tubi
+// lunghi del jib (LM0346/59/62) stanno a −1.6° dall'orizzontale, non a 0:
+// piega CAD = 36.0 − (−1.6) = 37.6°.
+const JIB_CAD_BEND_DEG = 37.6
 // Distanza gancio↔cerniera O a sfilo zero (m) — |(2662.54, -372.63)| mm
 // dall'Excel BGLift; usata dall'handle di drag per convertire in corsa.
 const HOOK_BASE_LEN_M = 2.688
@@ -61,8 +70,8 @@ const BOOM_SECTION_STROKE = 2.15
 // testa/snodo). Il jib e i pezzi non numerati si classificano per geometria;
 // ciò che resta vicino all'asse del braccio (martinetto compreso) va con la
 // 1ª sezione, tutto il resto con la colonna.
-function classifyAereaMesh(name, cx, cy) {
-  if (cy > 1.28 && cx > -0.87) return 'jib'
+function classifyAereaMesh(name, cx, cy, hasJib = true) {
+  if (hasJib && cy > 1.28 && cx > -0.87) return 'jib'
   const m = /^LM0(\d{3})$/.exec(name)
   if (m) {
     const n = Number(m[1])
@@ -124,6 +133,18 @@ export const FOOT_LIFT_MAX = 0.35 // sollevamento verticale massimo del piede (m
 const LEG_LUFF_TO_FOOT = 2.15
 // Quota nativa (Y) del perno orizzontale sulla torretta (boccole LM0510/BC0031).
 const LEG_LUFF_PIVOT_Y = -1.14
+
+// ── Ginocchio: piega dello stinco (LM0561 nel CAD) ─────────────────────────
+// Lo stinco (fodero inclinato LM0516 + piede) si piega attorno al perno del
+// ginocchio — la forcella LM0951/BC0029 che lo collega al braccio — portandosi
+// dietro il piede. Il perno sta a KNEE_ALONG metri dal riferimento del braccio
+// lungo la direzione della gamba, a quota KNEE_Y; asse orizzontale ⟂ gamba.
+export const KNEE_RANGE_DEG = 25 // piega massima ± (°); positivo = piede in su
+const KNEE_ALONG = 1.10
+const KNEE_Y = -1.37
+// Appartenenza allo stinco: oltre il ginocchio lungo l'asse gamba (la
+// ferramenta del ginocchio sta a t ≈ 0.51–0.58, il fodero parte da t = 0.72).
+const STINCO_T_MIN = 0.62
 // Il gruppo piede (tubo interno LM0519 + piatto PO0004/PR0088) resta separato
 // per una futura regolazione fine: oltre il ginocchio (t > 0.6) e sotto quota
 // -1.60 (il fodero esterno LM0516 arriva a y ≈ -1.57 e resta col braccio).
@@ -148,7 +169,9 @@ function classifyBassaMesh(name, cx, cy, cz) {
       const t = (rx * leg.dir[0] + rz * leg.dir[1]) / LEG_REACH
       const d = Math.abs(rx * leg.dir[1] - rz * leg.dir[0])
       if (t > -0.05 && t < 1.15 && d < LEG_RADIUS) {
-        return t > FOOT_T_MIN && cy < FOOT_Y_MAX ? `${leg.id}:piede` : leg.id
+        if (t > FOOT_T_MIN && cy < FOOT_Y_MAX) return `${leg.id}:piede`
+        if (t > STINCO_T_MIN) return `${leg.id}:stinco`
+        return leg.id
       }
       if (LEG_ARM_EXTRA_RE.test(name) && t > -0.3 && t < 0.1 && d < 0.3) {
         return leg.id
@@ -173,14 +196,21 @@ useGLTF.preload(MACHINE_MODEL_URL)
 // (pacco delle 4 sezioni + testa + jib) ruota attorno a BOOM_PIN con "Angolo"
 // e il jib attorno a JIB_PIN con "Angolo jib". Il modello è traslato in modo
 // che l'asse ralla coincida con l'origine del mondo.
-function MachineCadModel({ rotationDeg, boomAngleDeg, jibAngleDeg, extensionFrac, legAngles = {}, footLifts = {} }) {
+function MachineCadModel({ rotationDeg, boomAngleDeg, jibAngleDeg, extensionFrac, legAngles = {}, footLifts = {}, kneeAngles = {} }) {
   // URL del GLB dal modello caricato (progetto) — fallback sul m250 storico.
   const glbUrl = useCraneStore((s) => s.model?.glbUrl) || MACHINE_MODEL_URL
+  // Variante senza jib: niente gruppo jib, le mesh della testa restano al braccio.
+  const hasJib = useCraneStore((s) => s.model?.jib?.available ?? true)
   const { scene } = useGLTF(glbUrl)
 
   const { carro, legs, colonna, boomBase, sfilo1, sfilo2, sfilo3, jib } = useMemo(() => {
     const pick = (name) => {
-      const node = scene.getObjectByName(name)
+      let node = scene.getObjectByName(name)
+      if (!node) {
+        // Le varianti aggiungono suffissi al nome dell'assieme
+        // (es. "…_M250_senza_Jib"): match per prefisso.
+        scene.traverse((obj) => { if (!node && obj.name?.startsWith(name)) node = obj })
+      }
       if (!node) return null
       const clone = node.clone(true)
       clone.traverse((obj) => {
@@ -206,7 +236,7 @@ function MachineCadModel({ rotationDeg, boomAngleDeg, jibAngleDeg, extensionFrac
     }
 
     const aereaGroups = partition(pick(MACHINE_AEREA_NODE), (name, bb) =>
-      classifyAereaMesh(name, (bb.min.x + bb.max.x) / 2, (bb.min.y + bb.max.y) / 2))
+      classifyAereaMesh(name, (bb.min.x + bb.max.x) / 2, (bb.min.y + bb.max.y) / 2, hasJib))
     const bassaGroups = partition(pick(MACHINE_BASSA_NODE), (name, bb) =>
       classifyBassaMesh(name, (bb.min.x + bb.max.x) / 2, (bb.min.y + bb.max.y) / 2, (bb.min.z + bb.max.z) / 2))
 
@@ -222,6 +252,7 @@ function MachineCadModel({ rotationDeg, boomAngleDeg, jibAngleDeg, extensionFrac
         ...leg,
         tower: bassaGroups[`${leg.id}:torre`] ?? empty(),
         object: bassaGroups[leg.id] ?? empty(),
+        shin: bassaGroups[`${leg.id}:stinco`] ?? empty(),
         foot: bassaGroups[`${leg.id}:piede`] ?? empty(),
       })),
       colonna: aereaGroups.colonna ?? empty(),
@@ -231,7 +262,7 @@ function MachineCadModel({ rotationDeg, boomAngleDeg, jibAngleDeg, extensionFrac
       sfilo3: aereaGroups.sfilo3 ?? empty(),
       jib: aereaGroups.jib ?? empty(),
     } }
-  }, [scene])
+  }, [scene, hasJib])
 
   const recenter = [-MACHINE_SLEW_X, 0, -MACHINE_SLEW_Z]
   // Rotazioni relative alla posa CAD; elevazione positiva = punta in su (asse
@@ -256,6 +287,12 @@ function MachineCadModel({ rotationDeg, boomAngleDeg, jibAngleDeg, extensionFrac
           const h = clamp(footLifts[leg.id] ?? 0, 0, FOOT_LIFT_MAX)
           const luffAxis = new THREE.Vector3(-leg.dir[1], 0, leg.dir[0])
           const luffQuat = new THREE.Quaternion().setFromAxisAngle(luffAxis, Math.asin(h / LEG_LUFF_TO_FOOT))
+          // Ginocchio: stinco+piede ruotano attorno al perno della forcella
+          // sul braccio (stesso asse orizzontale ⟂ gamba del luff).
+          const kneeDeg = clamp(kneeAngles[leg.id] ?? 0, -KNEE_RANGE_DEG, KNEE_RANGE_DEG)
+          const kneeQuat = new THREE.Quaternion().setFromAxisAngle(luffAxis, d2r(kneeDeg))
+          const kneeX = leg.armRef[0] + leg.dir[0] * KNEE_ALONG
+          const kneeZ = leg.armRef[1] + leg.dir[1] * KNEE_ALONG
           return (
             <group key={leg.id} position={[leg.swingPivot[0], 0, leg.swingPivot[1]]} rotation={[0, rotY, 0]}>
               <group position={[-leg.swingPivot[0], 0, -leg.swingPivot[1]]}>
@@ -264,7 +301,14 @@ function MachineCadModel({ rotationDeg, boomAngleDeg, jibAngleDeg, extensionFrac
                   <group quaternion={luffQuat}>
                     <group position={[-leg.luffPivot[0], -LEG_LUFF_PIVOT_Y, -leg.luffPivot[1]]}>
                       <primitive object={leg.object} />
-                      <primitive object={leg.foot} />
+                      <group position={[kneeX, KNEE_Y, kneeZ]}>
+                        <group quaternion={kneeQuat}>
+                          <group position={[-kneeX, -KNEE_Y, -kneeZ]}>
+                            <primitive object={leg.shin} />
+                            <primitive object={leg.foot} />
+                          </group>
+                        </group>
+                      </group>
                     </group>
                   </group>
                 </group>
@@ -346,6 +390,7 @@ function SceneInner() {
         <Environment preset="city" />
         <Ground />
         <CraneAssembly />
+        <SafetyOverlay />
         <InteractiveLayer />
       </Suspense>
     </>
@@ -388,8 +433,113 @@ function CraneAssembly() {
       extensionFrac={extensionFrac}
       legAngles={config.outriggerAngleDeg}
       footLifts={config.outriggerFootLiftM}
+      kneeAngles={config.outriggerKneeDeg}
     />
   )
+}
+
+// ─────────────────────────────────────────────────────────────────
+// Overlay di sicurezza — frecce di reazione sui piedi + settore raggio
+// ─────────────────────────────────────────────────────────────────
+
+// Colori coerenti con le soglie del worker (warning 0.85, critical 1.0).
+const statusColor = (s) => (s === 'critical' ? '#dc2626' : s === 'warning' ? '#f59e0b' : '#16a34a')
+const utilColor = (u) => (u >= 1 ? '#dc2626' : u >= 0.85 ? '#f59e0b' : '#16a34a')
+
+function SafetyOverlay() {
+  const safety = useCraneStore((s) => s.safety)
+  const config = useCraneStore((s) => s.config)
+  if (!safety) return null
+  return (
+    <>
+      <WorkRadiusSector radiusM={safety.radiusM} rotationDeg={config.rotationDeg} status={safety.status} />
+      <FootForceArrows reactions={safety.reactions} legAngles={config.outriggerAngleDeg} />
+    </>
+  )
+}
+
+// ── Settore del raggio di lavoro sul piano terra ────────────────────────────
+// "Cono" piatto centrato sulla direzione del braccio: parte dall'asse ralla
+// (origine del mondo) e arriva al raggio di lavoro calcolato dal worker.
+// La parte aerea ruota di -rotationDeg attorno a Y e il braccio nella posa
+// CAD punta lungo +X: lo stesso gruppo ruotato orienta il settore.
+const SECTOR_HALF_DEG = 18
+
+function WorkRadiusSector({ radiusM, rotationDeg, status }) {
+  const color = statusColor(status)
+  const half = d2r(SECTOR_HALF_DEG)
+  // Geometrie a raggio unitario (create una sola volta) scalate col raggio,
+  // così il drag degli slider non rigenera buffer ad ogni tick.
+  const sector = useMemo(() => new THREE.CircleGeometry(1, 48, -half, 2 * half), [half])
+  const arc = useMemo(() => new THREE.RingGeometry(0.985, 1, 48, 1, -half, 2 * half), [half])
+
+  return (
+    <group rotation={[0, -d2r(rotationDeg), 0]}>
+      <mesh geometry={sector} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.02, 0]} scale={[radiusM, radiusM, 1]}>
+        <meshBasicMaterial color={color} transparent opacity={0.13} depthWrite={false} side={THREE.DoubleSide} />
+      </mesh>
+      <mesh geometry={arc} rotation={[-Math.PI / 2, 0, 0]} position={[0, 0.025, 0]} scale={[radiusM, radiusM, 1]}>
+        <meshBasicMaterial color={color} transparent opacity={0.85} depthWrite={false} side={THREE.DoubleSide} />
+      </mesh>
+      <Html position={[radiusM, 0.05, 0]} center zIndexRange={[10, 0]} style={{ pointerEvents: 'none' }}>
+        <div style={{
+          fontFamily: 'ui-monospace, monospace', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+          color, background: 'rgba(255,255,255,0.85)', border: `1px solid ${color}`,
+          borderRadius: 4, padding: '1px 5px', transform: 'translateY(-14px)',
+        }}>
+          R {radiusM.toFixed(2)} m
+        </div>
+      </Html>
+    </group>
+  )
+}
+
+// ── Frecce di forza sopra i piedi stabilizzatori ────────────────────────────
+// Una freccia verticale verso il basso sopra ogni piatto d'appoggio: la
+// lunghezza è proporzionale all'utilizzo del pad (reazione / carico max
+// ammissibile) e l'etichetta riporta la reazione calcolata dal worker.
+// Posizione del piatto in world: punto a LEG_REACH dal riferimento gamba,
+// ruotato dell'apertura attorno al perno verticale e ricentrato sulla ralla.
+function FootForceArrows({ reactions, legAngles }) {
+  return MACHINE_LEGS.map((leg) => {
+    const r = reactions.find((x) => x.name === leg.id)
+    if (!r) return null
+    const apertura = clamp(legAngles?.[leg.id] ?? LEG_OPEN_DEG, 0, LEG_OPEN_DEG)
+    const rotY = leg.foldSign * d2r(LEG_OPEN_DEG - apertura)
+    const fx = leg.armRef[0] + leg.dir[0] * LEG_REACH
+    const fz = leg.armRef[1] + leg.dir[1] * LEG_REACH
+    const vx = fx - leg.swingPivot[0]
+    const vz = fz - leg.swingPivot[1]
+    const c = Math.cos(rotY), s = Math.sin(rotY)
+    const wx = leg.swingPivot[0] + vx * c + vz * s - MACHINE_SLEW_X
+    const wz = leg.swingPivot[1] - vx * s + vz * c - MACHINE_SLEW_Z
+
+    const color = utilColor(r.utilization)
+    const len = 0.5 + 2.0 * Math.min(r.utilization, 1.25)
+    const tipY = 0.55 // punta appena sopra il piatto d'appoggio
+
+    return (
+      <group key={leg.id} position={[wx, 0, wz]}>
+        <mesh position={[0, tipY + 0.14, 0]} rotation={[Math.PI, 0, 0]}>
+          <coneGeometry args={[0.14, 0.28, 16]} />
+          <meshStandardMaterial color={color} />
+        </mesh>
+        <mesh position={[0, tipY + 0.28 + len / 2, 0]}>
+          <cylinderGeometry args={[0.045, 0.045, len, 12]} />
+          <meshStandardMaterial color={color} />
+        </mesh>
+        <Html position={[0, tipY + 0.28 + len + 0.22, 0]} center zIndexRange={[10, 0]} style={{ pointerEvents: 'none' }}>
+          <div style={{
+            fontFamily: 'ui-monospace, monospace', fontSize: 11, fontWeight: 700, whiteSpace: 'nowrap',
+            color: '#111', background: 'rgba(255,255,255,0.85)', border: `1px solid ${color}`,
+            borderRadius: 4, padding: '1px 5px',
+          }}>
+            {r.reaction_kN.toFixed(1)} kN
+          </div>
+        </Html>
+      </group>
+    )
+  })
 }
 
 // ─────────────────────────────────────────────────────────────────

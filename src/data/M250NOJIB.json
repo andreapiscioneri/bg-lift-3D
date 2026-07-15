@@ -1,0 +1,202 @@
+{
+  "$schema": "https://bglift.local/schemas/crane.schema.json",
+  "id": "M250-NOJIB",
+  "manufacturer": "BGLift",
+  "model": "M250",
+  "displayName": "BGLift M250",
+  "year": 2024,
+  "units": {
+    "length": "m",
+    "mass": "kg",
+    "force": "kN",
+    "angle": "deg",
+    "pressure": "kPa"
+  },
+  "chassis": {
+    "totalMass": 32000,
+    "wheelbase": 4.2,
+    "trackWidth": 2.5,
+    "centerOfGravity": {
+      "x": 0,
+      "y": 0.85,
+      "z": -0.2
+    },
+    "groundClearance": 0.32
+  },
+  "turret": {
+    "rotationRangeDeg": [
+      -360,
+      360
+    ],
+    "rotationSpeedDegPerSec": 1.5,
+    "mass": 4200,
+    "centerOfGravity": {
+      "x": 0,
+      "y": 1.4,
+      "z": 0
+    },
+    "pivotHeight": 1.65
+  },
+  "mainBoom": {
+    "type": "telescopic-synchronous",
+    "sections": 4,
+    "strokeMaxM": 2.15,
+    "elevationRangeDeg": [
+      0,
+      78
+    ],
+    "elevationSpeedDegPerSec": 1.2,
+    "telescopeSpeedMPerSec": 0.35,
+    "pivot": {
+      "x": 0,
+      "y": 2.09,
+      "z": -0.69
+    }
+  },
+  "liftCalculation": {
+    "description": "Calcolo carico sollevato — costanti e formule dall'Excel BGLift 'Calcolo carico sollevato M250' (N. Prandini / F. Di Minico, 2024-2026). Coordinate in mm nel piano verticale del braccio, origine O = cerniera torre/braccio, braccio a 0°. Le sezioni 2-4 traslano di extendsWithStroke × corsa.",
+    "sections": [
+      {
+        "id": "BR0089",
+        "mass_kg": 231.5,
+        "cg_mm": [
+          904.61,
+          -158.2
+        ],
+        "extendsWithStroke": 0
+      },
+      {
+        "id": "BR0007",
+        "mass_kg": 158.1,
+        "cg_mm": [
+          1298.85,
+          -148.37
+        ],
+        "extendsWithStroke": 1
+      },
+      {
+        "id": "BR0008",
+        "mass_kg": 95.1,
+        "cg_mm": [
+          1245.28,
+          -182.2
+        ],
+        "extendsWithStroke": 2
+      },
+      {
+        "id": "BR0009",
+        "mass_kg": 72.4,
+        "cg_mm": [
+          1369.07,
+          -205.57
+        ],
+        "extendsWithStroke": 3
+      }
+    ],
+    "hook_mm": [
+      2662.54,
+      -372.63
+    ],
+    "hookExtendsWithStroke": 3,
+    "cylTurret_mm": [
+      870,
+      -795
+    ],
+    "cylBoom_mm": [
+      465,
+      14
+    ],
+    "cylinders": {
+      "count": 2,
+      "bore_mm": 60,
+      "rod_mm": 45,
+      "pressureBore_bar": 150,
+      "pressureRod_bar": 30,
+      "pressureBoreMax_bar": 250,
+      "pressureRodMax_bar": 100
+    },
+    "strokeMax_mm": 2150
+  },
+  "jib": {
+    "available": false,
+    "liftCalculation": null,
+    "liftCalculationNote": "Versione senza jib: nessun calcolo jib. Il campo resta per uniformità di schema con BR0089 (M250 + JIB)."
+  },
+  "outriggers": {
+    "count": 4,
+    "layout": "H-frame",
+    "positions": {
+      "frontLeft": {
+        "x": -2.4,
+        "y": 0,
+        "z": 2.8
+      },
+      "frontRight": {
+        "x": 2.4,
+        "y": 0,
+        "z": 2.8
+      },
+      "rearLeft": {
+        "x": -2.4,
+        "y": 0,
+        "z": -2.8
+      },
+      "rearRight": {
+        "x": 2.4,
+        "y": 0,
+        "z": -2.8
+      }
+    },
+    "extensionStepsM": [
+      0,
+      1.6,
+      3.2,
+      4.8,
+      6.4
+    ],
+    "padArea_m2": 0.42,
+    "maxAllowableLoadPerPad_kN": 280,
+    "perOutriggerConfigurable": true
+  },
+  "stabilityLimits": {
+    "tippingLineSafetyFactor": 1.25,
+    "structuralSafetyFactor": 1.33,
+    "maxDynamicLoadFactor": 1.1,
+    "warningThreshold": 0.85,
+    "criticalThreshold": 1
+  },
+  "defaultConfiguration": {
+    "outriggerExtensionM": {
+      "frontLeft": 4.8,
+      "frontRight": 4.8,
+      "rearLeft": 4.8,
+      "rearRight": 4.8
+    },
+    "outriggerAngleDeg": {
+      "frontLeft": 45,
+      "frontRight": 45,
+      "rearLeft": 45,
+      "rearRight": 45
+    },
+    "outriggerFootLiftM": {
+      "frontLeft": 0,
+      "frontRight": 0,
+      "rearLeft": 0,
+      "rearRight": 0
+    },
+    "outriggerKneeDeg": {
+      "frontLeft": 0,
+      "frontRight": 0,
+      "rearLeft": 0,
+      "rearRight": 0
+    },
+    "boomStrokeM": 1,
+    "mainBoomAngleDeg": 30,
+    "pressureBoreBar": 150,
+    "pressureRodBar": 30,
+    "rotationDeg": 0,
+    "jibAngleDeg": 0,
+    "jibLengthM": 0,
+    "loadKg": 0
+  }
+}

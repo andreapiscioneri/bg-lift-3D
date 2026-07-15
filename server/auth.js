@@ -48,6 +48,14 @@ export function requireAdmin(req, res, next) {
   next()
 }
 
+/** Middleware: richiede ruolo TECNICO o ADMIN (da usare dopo requireAuth). */
+export function requireTecnico(req, res, next) {
+  if (req.user?.role !== 'TECNICO' && req.user?.role !== 'ADMIN') {
+    return res.status(403).json({ error: "Accesso riservato all'ufficio tecnico" })
+  }
+  next()
+}
+
 /** Rappresentazione pubblica dell'utente (mai passwordHash). */
 export function publicUser(u) {
   return {

@@ -8,6 +8,7 @@ import authRoutes from './routes/auth.js'
 import projectRoutes from './routes/projects.js'
 import modelRoutes, { UPLOADS_DIR } from './routes/models.js'
 import userRoutes from './routes/users.js'
+import reviewRoutes from './routes/reviews.js'
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
 const app = express()
@@ -21,6 +22,7 @@ app.use('/api/auth', authRoutes)
 app.use('/api/projects', projectRoutes)
 app.use('/api/models', modelRoutes)
 app.use('/api/admin/users', userRoutes)
+app.use('/api/reviews', reviewRoutes)
 
 app.get('/api/health', (req, res) => res.json({ ok: true }))
 
@@ -28,7 +30,9 @@ app.get('/api/health', (req, res) => res.json({ ok: true }))
 if (process.env.NODE_ENV === 'production') {
   const dist = path.join(__dirname, '..', 'dist')
   app.use(express.static(dist))
-  app.get('*', (req, res) => res.sendFile(path.join(dist, 'index.html')))
+  // SPA fallback. Express 5 usa path-to-regexp v8: il wildcard deve essere
+  // nominato ('/*splat'), '*' nudo lancia "Missing parameter name".
+  app.get('/*splat', (req, res) => res.sendFile(path.join(dist, 'index.html')))
 }
 
 // Error handler unico (multer, JSON malformato, errori Prisma…)

@@ -2,8 +2,8 @@
   "$schema": "https://bglift.local/schemas/crane.schema.json",
   "id": "BR0089",
   "manufacturer": "BGLift",
-  "model": "BR0089",
-  "displayName": "BGLift BR0089",
+  "model": "M250",
+  "displayName": "BGLift M250 + JIB",
   "year": 2024,
   "units": {
     "length": "m",
@@ -33,10 +33,10 @@
     "type": "telescopic-synchronous",
     "sections": 4,
     "strokeMaxM": 2.15,
-    "elevationRangeDeg": [0, 45],
+    "elevationRangeDeg": [0, 78],
     "elevationSpeedDegPerSec": 1.2,
     "telescopeSpeedMPerSec": 0.35,
-    "pivot": { "x": 0.0, "y": 2.09, "z": -0.79 }
+    "pivot": { "x": 0.0, "y": 2.09, "z": -0.69 }
   },
 
   "liftCalculation": {
@@ -67,7 +67,9 @@
     "articulationRangeDeg": [0, 75],
     "retractedLength": 4.0,
     "extendedLength": 9.5,
-    "telescopeSpeedMPerSec": 0.25
+    "telescopeSpeedMPerSec": 0.25,
+    "liftCalculation": null,
+    "liftCalculationNote": "Placeholder: le formule di portata del jib (2 sfili telescopici + bielle, vedi DWG 'Calcolo carico sollevato M250') non sono ancora state fornite da BGLift. Quando disponibili vanno qui con la stessa struttura di model.liftCalculation; il worker (computeJibLiftCapacity) le userà per limitare la SWL a min(braccio, jib). Anche massa/lunghezze qui sopra sono indicative."
   },
 
   "outriggers": {
@@ -97,6 +99,7 @@
     "outriggerExtensionM": { "frontLeft": 4.8, "frontRight": 4.8, "rearLeft": 4.8, "rearRight": 4.8 },
     "outriggerAngleDeg": { "frontLeft": 45, "frontRight": 45, "rearLeft": 45, "rearRight": 45 },
     "outriggerFootLiftM": { "frontLeft": 0, "frontRight": 0, "rearLeft": 0, "rearRight": 0 },
+    "outriggerKneeDeg": { "frontLeft": 0, "frontRight": 0, "rearLeft": 0, "rearRight": 0 },
     "boomStrokeM": 1.0,
     "mainBoomAngleDeg": 30,
     "pressureBoreBar": 150,

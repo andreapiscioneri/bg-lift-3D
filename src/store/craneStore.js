@@ -1,6 +1,16 @@
 import { create } from 'zustand'
 import BR0089 from '../data/BR0089.json'
 
+/** Estrae lo stato di conferma ufficio tecnico da un progetto del backend. */
+function reviewFromProject(project) {
+  return {
+    status: project.reviewStatus ?? 'NONE',
+    certificateUrl: project.certificateUrl ?? null,
+    technicianName: project.reviewTechnician?.name ?? null,
+    requestedAt: project.reviewRequestedAt ?? null,
+  }
+}
+
 /**
  * Stato globale dell'applicazione.
  * Lo stato è volutamente piatto e serializzabile: viene passato così com'è al Web Worker.
@@ -11,6 +21,9 @@ export const useCraneStore = create((set, get) => ({
 
   // --- Progetto aperto (null = configuratore standalone) ---
   projectId: null,
+  // Metadati progetto per il flusso di conferma ufficio tecnico.
+  projectOwnerId: null,
+  review: null, // { status, certificateUrl, technicianName, requestedAt }
 
   // --- Configurazione corrente (clonata dal defaultConfiguration) ---
   config: { ...BR0089.defaultConfiguration },
@@ -23,10 +36,15 @@ export const useCraneStore = create((set, get) => ({
   loadProject: (project) =>
     set({
       projectId: project.id,
+      projectOwnerId: project.userId ?? project.user?.id ?? null,
+      review: reviewFromProject(project),
       model: { ...project.craneModel.data, glbUrl: project.craneModel.glbUrl },
       config: { ...(project.config ?? project.craneModel.data.defaultConfiguration) },
       safety: null,
     }),
+
+  // Aggiorna lo stato conferma dopo una risposta del backend.
+  setReview: (project) => set({ review: reviewFromProject(project) }),
 
   // --- Output dal worker ---
   safety: null,
@@ -62,6 +80,15 @@ export const useCraneStore = create((set, get) => ({
       config: {
         ...s.config,
         outriggerFootLiftM: { ...s.config.outriggerFootLiftM, [name]: valueM },
+      },
+    })),
+
+  // Piega del ginocchio (stinco+piede) di una singola gamba (0 = posa CAD).
+  setOutriggerKnee: (name, valueDeg) =>
+    set((s) => ({
+      config: {
+        ...s.config,
+        outriggerKneeDeg: { ...s.config.outriggerKneeDeg, [name]: valueDeg },
       },
     })),
 

@@ -1,0 +1,25 @@
+# Contesto di build Docker (context = root del repo).
+# Escludiamo tutto ciò che va ricostruito o non serve a runtime.
+.git
+.gitignore
+node_modules
+dist
+server/uploads
+*.log
+npm-debug.log*
+yarn-error.log*
+.DS_Store
+
+# Segreti di sviluppo — mai dentro l'immagine
+.env
+.env.local
+.env.*.local
+
+# Asset sorgente pesanti non serviti a runtime (il frontend usa solo i .glb)
+public/models/*.STEP
+public/models/*.step
+
+# Materiale di sviluppo/CI non necessario in produzione
+.vscode
+.idea
+scratchpad

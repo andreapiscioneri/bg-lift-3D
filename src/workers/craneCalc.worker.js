@@ -83,6 +83,26 @@ function computeLiftCapacity(angleDeg, strokeMm, L, pressures = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────
+// Portata con jib — PLACEHOLDER (dati BGLift non ancora disponibili)
+// ─────────────────────────────────────────────────────────────────
+
+/**
+ * Limite di carico alla punta del jib. L'Excel/DWG "Calcolo carico sollevato
+ * M250" copre solo il braccio: le formule del jib (2 sfili telescopici,
+ * bielle di articolazione) non sono ancora state fornite. Quando arriveranno
+ * andranno in `model.jib.liftCalculation` (stessa filosofia di
+ * `model.liftCalculation`) e questa funzione dovrà restituire la portata
+ * ammessa alla punta; la SWL effettiva diventerà min(braccio, jib).
+ * Finché restituisce null il jib incide solo sulla cinematica
+ * (computeWorkingRadius / computeTipHeight), non sul limite di carico.
+ */
+function computeJibLiftCapacity(state, model, lift) {
+  if (!model.jib?.available || !(state.jibLengthM > 0)) return null
+  if (!model.jib.liftCalculation) return null // TODO: formule jib BGLift
+  return null
+}
+
+// ─────────────────────────────────────────────────────────────────
 // Cinematica — raggio di lavoro e altezza gancio
 // ─────────────────────────────────────────────────────────────────
 
@@ -260,7 +280,12 @@ const api = {
     )
     const radiusM  = computeWorkingRadius(state, model, lift)
     const tipHeightM = computeTipHeight(state, model, lift)
-    const swl_kg   = Math.max(0, lift.capacity_kg)
+    // SWL = limite braccio, eventualmente ridotto dal limite jib quando le
+    // formule saranno disponibili (oggi computeJibLiftCapacity → null).
+    const jibCapacity_kg = computeJibLiftCapacity(state, model, lift)
+    const swl_kg = Math.max(0, jibCapacity_kg != null
+      ? Math.min(lift.capacity_kg, jibCapacity_kg)
+      : lift.capacity_kg)
 
     // Utilizzo del carico (senza φ — il carico reale vs SWL nominale)
     const loadUtil = swl_kg > 0 ? state.loadKg / swl_kg : Infinity

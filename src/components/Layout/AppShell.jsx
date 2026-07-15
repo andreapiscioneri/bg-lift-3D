@@ -25,6 +25,9 @@ export default function AppShell({ children }) {
           </Link>
           <nav className="flex items-center gap-1">
             <NavLink to="/" end className={navClass}>Progetti</NavLink>
+            {(user?.role === 'TECNICO' || user?.role === 'ADMIN') && (
+              <NavLink to="/tecnico" className={navClass}>Ufficio tecnico</NavLink>
+            )}
             {user?.role === 'ADMIN' && (
               <NavLink to="/admin" className={navClass}>Amministrazione</NavLink>
             )}
@@ -32,8 +35,10 @@ export default function AppShell({ children }) {
           <div className="ml-auto flex items-center gap-3">
             <span className="text-sm text-muted hidden sm:block">
               {user?.name}
-              {user?.role === 'ADMIN' && (
-                <span className="ml-1.5 text-[10px] font-semibold uppercase bg-accent/10 text-accent rounded px-1.5 py-0.5">admin</span>
+              {(user?.role === 'ADMIN' || user?.role === 'TECNICO') && (
+                <span className="ml-1.5 text-[10px] font-semibold uppercase bg-accent/10 text-accent rounded px-1.5 py-0.5">
+                  {user.role === 'ADMIN' ? 'admin' : 'tecnico'}
+                </span>
               )}
             </span>
             <button

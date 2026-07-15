@@ -90,6 +90,7 @@ export default function UsersPanel() {
                       className="rounded border border-line px-2 py-1 text-xs bg-white disabled:opacity-50"
                     >
                       <option value="USER">Utente</option>
+                      <option value="TECNICO">Tecnico</option>
                       <option value="ADMIN">Admin</option>
                     </select>
                   </td>
@@ -179,6 +180,7 @@ function CreateUserModal({ onClose, onCreated }) {
             <span className="text-sm font-medium">Ruolo</span>
             <select value={form.role} onChange={set('role')} className={`${input} bg-white`}>
               <option value="USER">Utente</option>
+              <option value="TECNICO">Tecnico</option>
               <option value="ADMIN">Admin</option>
             </select>
           </label>

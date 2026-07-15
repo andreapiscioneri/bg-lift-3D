@@ -20,6 +20,7 @@ const projectInclude = {
   craneModel: {
     select: { id: true, code: true, name: true, type: true, glbUrl: true },
   },
+  reviewTechnician: { select: { id: true, name: true } },
 }
 
 /** Un utente vede solo i propri progetti; l'admin li vede tutti. */
@@ -60,11 +61,18 @@ router.post('/', async (req, res) => {
 })
 
 router.get('/:id', async (req, res) => {
+  // Il tecnico può aprire (in lettura) i progetti inviati all'ufficio tecnico.
+  const where =
+    req.user.role === 'TECNICO'
+      ? { id: req.params.id, OR: [{ userId: req.user.id }, { reviewStatus: { not: 'NONE' } }] }
+      : { id: req.params.id, ...ownerFilter(req) }
+
   const project = await prisma.project.findFirst({
-    where: { id: req.params.id, ...ownerFilter(req) },
+    where,
     include: {
       craneModel: true, // include anche data: serve al configuratore
       user: { select: { id: true, name: true, email: true } },
+      reviewTechnician: { select: { id: true, name: true } },
     },
   })
   if (!project) return res.status(404).json({ error: 'Progetto non trovato' })

@@ -1,0 +1,51 @@
+# Produzione: app Node + Postgres. L'app è esposta SOLO su 127.0.0.1:3001;
+# nginx sul host fa da reverse proxy con TLS per lift.bglift.com.
+#
+# Uso (dalla cartella deploy/, con un .env accanto — vedi .env.production.example):
+#   docker compose -f docker-compose.prod.yml --env-file .env up -d --build
+#   docker compose -f docker-compose.prod.yml logs -f app
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: bglift-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-bglift}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?definire POSTGRES_PASSWORD nel .env}
+      POSTGRES_DB: ${POSTGRES_DB:-bglift}
+    volumes:
+      - bglift-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-bglift}']
+      interval: 5s
+      timeout: 5s
+      retries: 12
+
+  app:
+    build:
+      context: ..
+      dockerfile: deploy/Dockerfile
+    image: bglift-3d:latest
+    container_name: bglift-app
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      NODE_ENV: production
+      PORT: 3001
+      DATABASE_URL: postgresql://${POSTGRES_USER:-bglift}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-bglift}?schema=public
+      JWT_SECRET: ${JWT_SECRET:?definire JWT_SECRET nel .env}
+      SEED_ON_START: ${SEED_ON_START:-false}
+    volumes:
+      # Contenuti caricati dall'admin/tecnico (GLB modelli, PDF certificati):
+      # devono sopravvivere ai redeploy.
+      - bglift-uploads:/app/server/uploads
+    ports:
+      # Solo loopback: raggiungibile unicamente da nginx sul host.
+      - '127.0.0.1:3001:3001'
+
+volumes:
+  bglift-pgdata:
+  bglift-uploads:

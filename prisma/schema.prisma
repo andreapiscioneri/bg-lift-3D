@@ -1,5 +1,8 @@
 generator client {
-  provider = "prisma-client-js"
+  provider      = "prisma-client-js"
+  // "native" per lo sviluppo locale; il target Debian serve al container di
+  // produzione (node:20-bookworm-slim) altrimenti il query engine non è trovato.
+  binaryTargets = ["native", "debian-openssl-3.0.x"]
 }
 
 datasource db {
@@ -9,7 +12,18 @@ datasource db {
 
 enum Role {
   USER
+  TECNICO
   ADMIN
+}
+
+// Flusso di conferma ufficio tecnico:
+// NONE → (utente invia) REQUESTED → (tecnico prende in carico) IN_REVIEW
+// → (tecnico allega PDF) CERTIFIED. Un nuovo invio riparte da REQUESTED.
+enum ReviewStatus {
+  NONE
+  REQUESTED
+  IN_REVIEW
+  CERTIFIED
 }
 
 enum CraneType {
@@ -27,6 +41,7 @@ model User {
   role         Role      @default(USER)
   active       Boolean   @default(true)
   projects     Project[]
+  reviews      Project[] @relation("TechnicianReviews")
   createdAt    DateTime  @default(now())
   updatedAt    DateTime  @updatedAt
 }
@@ -53,8 +68,18 @@ model Project {
   craneModel   CraneModel @relation(fields: [craneModelId], references: [id])
   craneModelId String
   config       Json?
+
+  // Conferma ufficio tecnico
+  reviewStatus       ReviewStatus @default(NONE)
+  reviewRequestedAt  DateTime?
+  reviewTechnician   User?        @relation("TechnicianReviews", fields: [reviewTechnicianId], references: [id], onDelete: SetNull)
+  reviewTechnicianId String?
+  certificateUrl     String?
+  certifiedAt        DateTime?
+
   createdAt    DateTime   @default(now())
   updatedAt    DateTime   @updatedAt
 
   @@index([userId])
+  @@index([reviewStatus])
 }

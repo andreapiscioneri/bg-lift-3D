@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom'
 import AppShell from '../components/Layout/AppShell'
 import { api, CRANE_TYPES, craneTypeLabel } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
+import { REVIEW_LABELS, REVIEW_CHIP, canSendReview } from '../utils/review'
 
 function formatDate(iso) {
   return new Date(iso).toLocaleDateString('it-IT', {
@@ -31,6 +32,15 @@ export default function DashboardPage() {
     if (!window.confirm(`Eliminare il progetto “${p.name}”?`)) return
     await api.delete(`/api/projects/${p.id}`)
     reload()
+  }
+
+  async function onSendReview(p) {
+    try {
+      await api.post(`/api/reviews/${p.id}/request`)
+      reload()
+    } catch (err) {
+      setError(err.message)
+    }
   }
 
   return (
@@ -77,6 +87,30 @@ export default function DashboardPage() {
                 <p className="text-xs text-muted mt-1">di {p.user.name}</p>
               )}
               <p className="text-xs text-muted mt-3">Aggiornato {formatDate(p.updatedAt)}</p>
+
+              {/* Stato conferma ufficio tecnico */}
+              {REVIEW_LABELS[p.reviewStatus] && (
+                <div className={`mt-3 flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5 text-[11px] font-semibold ${REVIEW_CHIP[p.reviewStatus]}`}>
+                  <span className="truncate">
+                    {REVIEW_LABELS[p.reviewStatus]}
+                    {p.reviewStatus === 'IN_REVIEW' && p.reviewTechnician && ` — ${p.reviewTechnician.name}`}
+                  </span>
+                  {p.reviewStatus === 'CERTIFIED' && p.certificateUrl && (
+                    <a href={p.certificateUrl} target="_blank" rel="noreferrer" className="underline flex-shrink-0">
+                      Certificato PDF
+                    </a>
+                  )}
+                </div>
+              )}
+              {canSendReview(p.reviewStatus) && (
+                <button
+                  onClick={() => onSendReview(p)}
+                  className="mt-3 w-full rounded-lg border border-accent text-accent hover:bg-accent hover:text-white transition text-xs font-semibold py-1.5"
+                >
+                  {p.reviewStatus === 'CERTIFIED' ? 'Invia di nuovo per conferma' : 'Invia per conferma ufficio tecnico'}
+                </button>
+              )}
+
               <div className="mt-4 pt-4 border-t border-line flex items-center gap-2">
                 <Link
                   to={`/projects/${p.id}`}
