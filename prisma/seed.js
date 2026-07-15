@@ -7,33 +7,33 @@ import { fileURLToPath } from 'node:url'
 
 const prisma = new PrismaClient()
 const __dirname = path.dirname(fileURLToPath(import.meta.url))
+const isProd = process.env.NODE_ENV === 'production'
+
+/**
+ * Crea un utente iniziale. In PRODUZIONE le credenziali arrivano SOLO da
+ * variabili d'ambiente (niente password deboli hardcoded): se mancano, l'utente
+ * non viene creato. In sviluppo si usa il fallback comodo (localhost).
+ * `update: {}` → idempotente, non sovrascrive un utente già esistente.
+ */
+async function seedUser(role, envPrefix, devEmail, devName, devPass) {
+  const email = process.env[`${envPrefix}_EMAIL`] || (isProd ? null : devEmail)
+  const pass = process.env[`${envPrefix}_PASSWORD`] || (isProd ? null : devPass)
+  const name = process.env[`${envPrefix}_NAME`] || devName
+  if (!email || !pass) {
+    console.log(`${role}: nessuna credenziale (${envPrefix}_EMAIL/_PASSWORD) — salto`)
+    return
+  }
+  await prisma.user.upsert({
+    where: { email },
+    update: {},
+    create: { email, name, role, passwordHash: await bcrypt.hash(pass, 10) },
+  })
+  console.log(`${role}: ${email}`)
+}
 
 async function main() {
-  // Admin di default (cambiare password al primo accesso in produzione)
-  const admin = await prisma.user.upsert({
-    where: { email: 'admin@bglift.it' },
-    update: {},
-    create: {
-      email: 'admin@bglift.it',
-      name: 'Amministratore',
-      passwordHash: await bcrypt.hash('admin123', 10),
-      role: 'ADMIN',
-    },
-  })
-  console.log(`Admin: ${admin.email}`)
-
-  // Utente ufficio tecnico di default (cambiare password in produzione)
-  const tecnico = await prisma.user.upsert({
-    where: { email: 'tecnico@bglift.it' },
-    update: {},
-    create: {
-      email: 'tecnico@bglift.it',
-      name: 'Ufficio Tecnico',
-      passwordHash: await bcrypt.hash('tecnico123', 10),
-      role: 'TECNICO',
-    },
-  })
-  console.log(`Tecnico: ${tecnico.email}`)
+  await seedUser('ADMIN', 'SEED_ADMIN', 'admin@bglift.it', 'Amministratore', 'admin123')
+  await seedUser('TECNICO', 'SEED_TECNICO', 'tecnico@bglift.it', 'Ufficio Tecnico', 'tecnico123')
 
   // Modello BR0089 esistente nel repo (GLB già in public/models)
   const dataPath = path.join(__dirname, '..', 'src', 'data', 'BR0089.json')
