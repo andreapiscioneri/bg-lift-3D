@@ -1,0 +1,40 @@
+name: Seed produzione (manuale)
+
+# Riallinea i dati nel DB di produzione col seed del repo (utenti default e
+# CraneModel.data dei modelli M250). Solo avvio manuale: il seed fa upsert di
+# data/name dei modelli e sovrascriverebbe eventuali modifiche fatte
+# dall'admin in produzione — lanciarlo consapevolmente dalla tab Actions.
+#
+# Usa gli stessi secret del deploy (DEPLOY_SSH_KEY, DEPLOY_KNOWN_HOSTS,
+# DEPLOY_HOST, DEPLOY_USER). Richiede che il container bglift-app sia attivo
+# e già aggiornato (fare prima il deploy se serve il seed di dati nuovi).
+
+on:
+  workflow_dispatch: {}
+
+concurrency:
+  group: deploy-lift-production
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Configura SSH
+        env:
+          DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          DEPLOY_KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
+        run: |
+          mkdir -p ~/.ssh
+          printf '%s\n' "$DEPLOY_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          printf '%s\n' "$DEPLOY_KNOWN_HOSTS" > ~/.ssh/known_hosts
+
+      - name: Esegui seed nel container
+        env:
+          TARGET: ${{ secrets.DEPLOY_USER }}@${{ secrets.DEPLOY_HOST }}
+        run: |
+          ssh -i ~/.ssh/deploy_key -o UserKnownHostsFile=~/.ssh/known_hosts "$TARGET" '
+            set -e
+            docker exec bglift-app node prisma/seed.js
+          '
