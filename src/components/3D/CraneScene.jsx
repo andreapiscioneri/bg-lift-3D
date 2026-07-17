@@ -118,6 +118,9 @@ const MACHINE_LEGS = [
   { id: 'rearRight',  armRef: [-3.35, -0.90], swingPivot: [-3.07, -0.61], luffPivot: [-3.26, -0.80], dir: [-0.707, -0.707], foldSign:  1 },
 ]
 export const LEG_OPEN_DEG = 45
+// Fori di apertura della gamba visti dall'alto (mail BGLift/F. Di Minico,
+// 16-07-2026): 3 posizioni fisse per gamba, indipendenti. 45° = posa CAD.
+export const LEG_POSITIONS_DEG = [0, 22, 45]
 // Lunghezza utile della gamba dal perno al piatto d'appoggio (per il test di
 // appartenenza lungo l'asse) e raggio del "tubo" attorno all'asse.
 const LEG_REACH = 2.05
@@ -139,7 +142,13 @@ const LEG_LUFF_PIVOT_Y = -1.14
 // ginocchio — la forcella LM0951/BC0029 che lo collega al braccio — portandosi
 // dietro il piede. Il perno sta a KNEE_ALONG metri dal riferimento del braccio
 // lungo la direzione della gamba, a quota KNEE_Y; asse orizzontale ⟂ gamba.
-export const KNEE_RANGE_DEG = 25 // piega massima ± (°); positivo = piede in su
+// Fori a posizione fissa (mail BGLift/F. Di Minico, 16-07-2026): 0/23.5/47°,
+// indipendenti per gamba. In config si salva la posizione meccanica (0..47);
+// 0 = posa CAD, le altre piegano lo stinco portando il piede in giù/sotto
+// (KNEE_BEND_SIGN; se sulla macchina reale il verso fosse opposto basta
+// invertire il segno qui).
+export const KNEE_POSITIONS_DEG = [0, 23.5, 47]
+const KNEE_BEND_SIGN = -1
 const KNEE_ALONG = 1.10
 const KNEE_Y = -1.37
 // Appartenenza allo stinco: oltre il ginocchio lungo l'asse gamba (la
@@ -288,9 +297,10 @@ function MachineCadModel({ rotationDeg, boomAngleDeg, jibAngleDeg, extensionFrac
           const luffAxis = new THREE.Vector3(-leg.dir[1], 0, leg.dir[0])
           const luffQuat = new THREE.Quaternion().setFromAxisAngle(luffAxis, Math.asin(h / LEG_LUFF_TO_FOOT))
           // Ginocchio: stinco+piede ruotano attorno al perno della forcella
-          // sul braccio (stesso asse orizzontale ⟂ gamba del luff).
-          const kneeDeg = clamp(kneeAngles[leg.id] ?? 0, -KNEE_RANGE_DEG, KNEE_RANGE_DEG)
-          const kneeQuat = new THREE.Quaternion().setFromAxisAngle(luffAxis, d2r(kneeDeg))
+          // sul braccio (stesso asse orizzontale ⟂ gamba del luff). Il valore
+          // è la posizione meccanica del foro (0..47°).
+          const kneeDeg = clamp(kneeAngles[leg.id] ?? 0, 0, KNEE_POSITIONS_DEG[KNEE_POSITIONS_DEG.length - 1])
+          const kneeQuat = new THREE.Quaternion().setFromAxisAngle(luffAxis, KNEE_BEND_SIGN * d2r(kneeDeg))
           const kneeX = leg.armRef[0] + leg.dir[0] * KNEE_ALONG
           const kneeZ = leg.armRef[1] + leg.dir[1] * KNEE_ALONG
           return (

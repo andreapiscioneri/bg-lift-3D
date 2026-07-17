@@ -4,6 +4,8 @@ import { useState, useEffect, useRef } from 'react'
  * Slider touch-friendly.
  * compact=true → etichette più piccole, thumb leggermente ridotto,
  * meno spazio verticale (per la griglia 2×2 degli stabilizzatori).
+ * positions=[…] → slider a posizioni fisse (fori meccanici): il cursore
+ * scatta solo sui valori elencati e sotto la barra compaiono tutte le tacche.
  */
 export default function Slider({
   label,
@@ -16,10 +18,23 @@ export default function Slider({
   disabled = false,
   compact = false,
   defaultValue,
+  positions,
 }) {
-  const isModified = defaultValue !== undefined && Math.abs(value - defaultValue) > step / 2
+  // Modalità a posizioni fisse: si lavora in "spazio indice" (0..n-1) e si
+  // riconverte al valore meccanico; il testo digitato scatta al foro più vicino.
+  const fixed = Array.isArray(positions) && positions.length > 1
+  const nearestIndex = (v) =>
+    positions.reduce((best, p, i) =>
+      Math.abs(p - v) < Math.abs(positions[best] - v) ? i : best, 0)
+  const snap = (v) => positions[nearestIndex(v)]
+
+  const decimals = fixed
+    ? (positions.some((p) => p % 1 !== 0) ? 1 : 0)
+    : (step < 1 ? 1 : 0)
+  const epsilon = fixed ? 1e-6 : step / 2
+  const isModified = defaultValue !== undefined && Math.abs(value - defaultValue) > epsilon
   const formatted =
-    typeof value === 'number' ? value.toFixed(step < 1 ? 1 : 0) : String(value)
+    typeof value === 'number' ? value.toFixed(decimals) : String(value)
 
   // Il testo digitato vive in uno stato locale, scollegato dal valore
   // "committato" finché l'utente sta scrivendo — altrimenti ogni carattere
@@ -39,9 +54,11 @@ export default function Slider({
       setText(formatted)
       return
     }
-    const clamped = Math.min(max, Math.max(min, parsed))
-    onChange(clamped)
-    setText(clamped.toFixed(step < 1 ? 1 : 0))
+    const committed = fixed
+      ? snap(parsed)
+      : Math.min(max, Math.max(min, parsed))
+    onChange(committed)
+    setText(committed.toFixed(decimals))
   }
 
   return (
@@ -85,15 +102,19 @@ export default function Slider({
         </span>
       </div>
 
-      {/* Track + thumb */}
+      {/* Track + thumb — in modalità posizioni fisse il range lavora
+          sull'indice del foro, così il cursore scatta tra le tacche */}
       <input
         type="range"
-        min={min}
-        max={max}
-        step={step}
-        value={value}
+        min={fixed ? 0 : min}
+        max={fixed ? positions.length - 1 : max}
+        step={fixed ? 1 : step}
+        value={fixed ? nearestIndex(value) : value}
         disabled={disabled}
-        onChange={(e) => onChange(parseFloat(e.target.value))}
+        onChange={(e) => {
+          const v = parseFloat(e.target.value)
+          onChange(fixed ? positions[v] : v)
+        }}
         className={[
           'w-full appearance-none rounded-full bg-line accent-accent cursor-pointer',
           'disabled:opacity-40 disabled:cursor-not-allowed',
@@ -123,14 +144,16 @@ export default function Slider({
         }}
       />
 
-      {/* Min / Max */}
+      {/* Min / Max — o tutte le tacche in modalità posizioni fisse */}
       <div className="flex justify-between mt-0.5">
-        <span className={`font-mono text-muted ${compact ? 'text-[9px]' : 'text-[10px]'}`}>
-          {min}{unit}
-        </span>
-        <span className={`font-mono text-muted ${compact ? 'text-[9px]' : 'text-[10px]'}`}>
-          {max}{unit}
-        </span>
+        {(fixed ? positions : [min, max]).map((p, i) => (
+          <span
+            key={i}
+            className={`font-mono ${fixed && Math.abs(p - value) < 1e-6 ? 'text-accent font-bold' : 'text-muted'} ${compact ? 'text-[9px]' : 'text-[10px]'}`}
+          >
+            {p}{unit}
+          </span>
+        ))}
       </div>
     </label>
   )

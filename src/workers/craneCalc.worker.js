@@ -163,22 +163,58 @@ function computeTipHeight(state, model, lift) {
  * Il carico viene amplificato dal fattore dinamico φ = stabilityLimits.maxDynamicLoadFactor
  * per rispettare EN 13000.
  */
+/**
+ * Posizioni effettive dei pad rispetto all'asse ralla.
+ *
+ * Con `outriggers.legGeometry` (M250, dal DWG top-view BGLift "apertura
+ * gambe 0/22/45"): perno verticale gamba a pivotLatM dall'asse macchina e
+ * pivotLongFront/RearM dall'asse ralla; distanza perno→piede
+ * R(ginocchio) = kneePivotM + shinM·cos(ginocchio). Verificato 1:1 sulle
+ * quote del DWG (1117/1268/1821/2106 laterali, 1896/2181/2361 long.).
+ * "Alt. piede" = adattamento a un appoggio più alto: il piede resta
+ * comunque appoggiato e portante; l'alzata (rotazione dell'intera gamba
+ * attorno al perno orizzontale) accorcia solo la proiezione orizzontale
+ * del piede di cos(asin(h / luffToFootM)).
+ *
+ * Senza legGeometry: fallback storico H-frame (positions + estensioni).
+ */
+function computePadPositions(state, outriggers) {
+  const PAD_NAMES = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight']
+  const g = outriggers.legGeometry
+  if (!g) {
+    const extMap = state.outriggerExtensionM ?? {}
+    return PAD_NAMES.map((name) => {
+      const base = outriggers.positions[name]
+      const side = Math.sign(base.x) || 1
+      return {
+        name,
+        x: side * (Math.abs(base.x) + (extMap[name] ?? 0)),
+        z: base.z,
+      }
+    })
+  }
+  return PAD_NAMES.map((name) => {
+    const front = name.startsWith('front')
+    const left = name.endsWith('Left')
+    const apertura = d2r(clamp(state.outriggerAngleDeg?.[name] ?? 45, 0, 45))
+    const ginocchio = d2r(clamp(state.outriggerKneeDeg?.[name] ?? 0, 0, 47))
+    const liftM = Math.max(0, state.outriggerFootLiftM?.[name] ?? 0)
+    const luffCos = Math.cos(Math.asin(Math.min(1, liftM / (g.luffToFootM ?? 2.15))))
+    const R = (g.kneePivotM + g.shinM * Math.cos(ginocchio)) * luffCos
+    return {
+      name,
+      x: (left ? -1 : 1) * (g.pivotLatM + R * Math.sin(apertura)),
+      z: (front ? g.pivotLongFrontM : g.pivotLongRearM) + (front ? 1 : -1) * R * Math.cos(apertura),
+    }
+  })
+}
+
 function computeOutriggerReactions(state, model, radiusM) {
   const g = 9.81
   const { outriggers, chassis, turret, mainBoom, jib, stabilityLimits } = model
 
   // ── Posizioni effettive dei pad ──────────────────────────────
-  const extMap = state.outriggerExtensionM
-  const PAD_NAMES = ['frontLeft', 'frontRight', 'rearLeft', 'rearRight']
-  const pads = PAD_NAMES.map((name) => {
-    const base = outriggers.positions[name]
-    const side = Math.sign(base.x) || 1
-    return {
-      name,
-      x: side * (Math.abs(base.x) + (extMap[name] ?? 0)),
-      z: base.z,
-    }
-  })
+  const pads = computePadPositions(state, outriggers)
 
   // ── Masse ────────────────────────────────────────────────────
   const φ            = stabilityLimits.maxDynamicLoadFactor   // 1.10
@@ -224,18 +260,25 @@ function computeOutriggerReactions(state, model, radiusM) {
     (mChassis * cgChassis.z + mTurret * cgTurret.z +
      mBoom    * cgBoom.z    + mJib    * cgJib.z    + mLoad * cgLoad.z) / mTotal
 
-  // ── Distribuzione reazioni (piastra rigida di Winkler) ───────
-  const W     = mTotal * g                              // N — peso totale
-  const Mx    = W * cz                                  // momento attorno a X (causa tip avanti/dietro)
-  const Mz    = W * cx                                  // momento attorno a Z (causa tip laterale)
-  const sumZ2 = pads.reduce((s, p) => s + p.z * p.z, 0) || 1
-  const sumX2 = pads.reduce((s, p) => s + p.x * p.x, 0) || 1
+  // ── Distribuzione reazioni (piastra rigida su molle) ─────────
+  // In coordinate baricentriche dei pad: vale anche per footprint
+  // asimmetrici (gambe con aperture/ginocchia diverse), dove la vecchia
+  // forma W/4 + M·zi/Σz² presupponeva pads simmetrici alla ralla.
+  // Tutti i piedi si assumono appoggiati (un piede "alzato" poggia su un
+  // appoggio più alto): la forza cambia solo tramite la geometria dei pad.
+  const W = mTotal * g                                  // N — peso totale
+  const n = pads.length
 
   const padArea    = outriggers.padArea_m2
   const maxLoad_N  = outriggers.maxAllowableLoadPerPad_kN * 1000
 
+  const xbar = pads.reduce((s, p) => s + p.x, 0) / n
+  const zbar = pads.reduce((s, p) => s + p.z, 0) / n
+  const Sx2  = pads.reduce((s, p) => s + (p.x - xbar) ** 2, 0) || 1
+  const Sz2  = pads.reduce((s, p) => s + (p.z - zbar) ** 2, 0) || 1
+
   const reactions = pads.map((p) => {
-    const R_raw     = W / 4 + (Mx * p.z) / sumZ2 + (Mz * p.x) / sumX2
+    const R_raw = W * (1 / n + ((cx - xbar) * (p.x - xbar)) / Sx2 + ((cz - zbar) * (p.z - zbar)) / Sz2)
     const R_clamped = Math.max(0, R_raw)
     return {
       name:         p.name,
@@ -248,13 +291,13 @@ function computeOutriggerReactions(state, model, radiusM) {
 
   // ── Margine al ribaltamento ──────────────────────────────────
   // EN 13000: la gru deve mantenere un fattore di stabilità ≥ 1.25
-  // Qui calcoliamo: minReaction / (W/4)
+  // Qui calcoliamo: minReaction / (W/n)
   //   > 1  → carico uniformemente distribuito (ottimale)
   //   = 0  → un pad sta per sollevarsi (limite ribaltamento)
   //   < 0  → ribaltamento (il pad dovrebbe essere ancorato)
   const minRaw        = Math.min(...reactions.map((r) => r.reaction_raw_kN))
-  const meanReact_kN  = W / 4 / 1000
-  const tippingMargin = minRaw / meanReact_kN   // 0 = limite, >0 = stabile, <0 = ribaltamento
+  const meanReact_kN  = W / n / 1000
+  const tippingMargin = minRaw / meanReact_kN
 
   return { reactions, tippingMargin, cx, cz }
 }

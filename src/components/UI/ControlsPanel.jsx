@@ -4,7 +4,7 @@ import Slider from './Slider'
 import StatusBadge from './StatusBadge'
 import ReviewBox from './ReviewBox'
 import { fmtM } from '../../utils/format'
-import { LEG_OPEN_DEG, FOOT_LIFT_MAX, KNEE_RANGE_DEG } from '../3D/CraneScene'
+import { LEG_OPEN_DEG, FOOT_LIFT_MAX, LEG_POSITIONS_DEG, KNEE_POSITIONS_DEG } from '../3D/CraneScene'
 
 // Gambe stabilizzatrici: apertura 0° = ripiegata lungo l'asse macchina,
 // LEG_OPEN_DEG = tutta aperta a ragno (posa CAD). "Anteriore" = lato punta braccio.
@@ -231,9 +231,7 @@ export default function ControlsPanel({ size = 'lg' }) {
             <Slider
               label="Apertura"
               unit="°"
-              min={0}
-              max={LEG_OPEN_DEG}
-              step={1}
+              positions={model.outriggers?.legSwingPositionsDeg ?? LEG_POSITIONS_DEG}
               value={config.outriggerAngleDeg?.[name] ?? LEG_OPEN_DEG}
               defaultValue={model.defaultConfiguration.outriggerAngleDeg[name]}
               onChange={(v) => setOutriggerAngle(name, v)}
@@ -253,9 +251,7 @@ export default function ControlsPanel({ size = 'lg' }) {
             <Slider
               label="Ginocchio"
               unit="°"
-              min={-KNEE_RANGE_DEG}
-              max={KNEE_RANGE_DEG}
-              step={1}
+              positions={model.outriggers?.kneePositionsDeg ?? KNEE_POSITIONS_DEG}
               value={config.outriggerKneeDeg?.[name] ?? 0}
               defaultValue={model.defaultConfiguration.outriggerKneeDeg?.[name] ?? 0}
               onChange={(v) => setOutriggerKnee(name, v)}
@@ -264,11 +260,14 @@ export default function ControlsPanel({ size = 'lg' }) {
           </Collapsible>
         ))}
         <p className="text-[10px] text-muted leading-snug">
-          Apertura: 0° = gamba ripiegata lungo il carro, {LEG_OPEN_DEG}° = tutta aperta.
-          Alt. piede: 0 = piede a terra, valori positivi = piede sollevato.
-          Ginocchio: piega dello stinco, positivo = piede in su.
-          Per ora sono solo visivi: il calcolo di stabilità usa ancora
-          l&apos;estensione stabilizzatori della configurazione.
+          Apertura e Ginocchio hanno posizioni fisse (fori sulla macchina),
+          regolabili gamba per gamba: apertura 0° = ripiegata lungo il carro,
+          {' '}{LEG_OPEN_DEG}° = tutta aperta; ginocchio 0° = stinco in posa di
+          progetto. Alt. piede: 0 = piede a terra, valori positivi = piede su
+          un appoggio più alto (resta comunque appoggiato e portante). Le
+          reazioni usano le posizioni reali dei piedi ricavate da apertura,
+          ginocchio e alt. piede (geometria dal disegno BGLift); le masse
+          macchina restano indicative.
         </p>
       </Group>
 

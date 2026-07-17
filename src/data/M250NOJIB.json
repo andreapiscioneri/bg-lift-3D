@@ -156,7 +156,26 @@
     ],
     "padArea_m2": 0.42,
     "maxAllowableLoadPerPad_kN": 280,
-    "perOutriggerConfigurable": true
+    "perOutriggerConfigurable": true,
+    "legSwingPositionsDeg": [
+      0,
+      22,
+      45
+    ],
+    "kneePositionsDeg": [
+      0,
+      23.5,
+      47
+    ],
+    "legGeometry": {
+      "description": "Geometria reale gambe dal DWG top-view BGLift 'apertura 0/22/45': perno verticale a pivotLatM dall'asse macchina, pivotLongFront/RearM dall'asse ralla (fori a ±400 mm dal piano trasversale, ralla 100 mm arretrata). Piede a R = kneePivotM + shinM·cos(ginocchio) dal perno: R(0°)=2.518, R(23.5°)=2.413, R(47°)=2.115. Quote DWG riprodotte 1:1 (lat 1117/1268/1821/2106, long 1896/2181/2361). Sostituisce positions/extensionStepsM nel calcolo reazioni.",
+      "pivotLatM": 0.325,
+      "pivotLongFrontM": 0.5,
+      "pivotLongRearM": -0.3,
+      "kneePivotM": 1.2507,
+      "shinM": 1.2673,
+      "luffToFootM": 2.15
+    }
   },
   "stabilityLimits": {
     "tippingLineSafetyFactor": 1.25,
