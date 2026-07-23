@@ -1,9 +1,10 @@
 import { fmtKg, fmtM, fmtPct } from '../../utils/format'
+import { useTranslation } from '../../i18n/I18nContext'
 
-const LABELS = {
-  safe:     'IN SICUREZZA',
-  warning:  'ATTENZIONE',
-  critical: 'CRITICO — STOP',
+const LABEL_KEYS = {
+  safe:     'status.safe',
+  warning:  'status.warning',
+  critical: 'status.critical',
 }
 
 const STYLES = {
@@ -13,16 +14,17 @@ const STYLES = {
 }
 
 export default function StatusBadge({ safety, compact = false }) {
+  const t = useTranslation()
   if (!safety) {
     return (
       <div className="px-3 py-2 rounded-lg border border-line bg-white text-xs text-muted">
-        Calcolo in corso…
+        {t('status.calculating')}
       </div>
     )
   }
 
   const klass = STYLES[safety.status] ?? STYLES.safe
-  const label = LABELS[safety.status] ?? LABELS.safe
+  const label = t(LABEL_KEYS[safety.status] ?? LABEL_KEYS.safe)
   const tippingPct = Math.max(0, Math.min(100, Math.round(safety.tippingMargin * 100)))
 
   /* compact=true → versione ridotta per panel xs */
@@ -64,23 +66,23 @@ export default function StatusBadge({ safety, compact = false }) {
 
       {/* Grid metriche */}
       <div className="grid grid-cols-2 gap-x-3 gap-y-0.5 font-mono text-[11px] text-black px-3 pb-2">
-        <span className="text-muted">Raggio</span>
+        <span className="text-muted">{t('status.radius')}</span>
         <span className="text-right">{fmtM(safety.radiusM)}</span>
 
-        <span className="text-muted">SWL</span>
+        <span className="text-muted">{t('status.swl')}</span>
         <span className="text-right">{fmtKg(safety.swl_kg)}</span>
 
-        <span className="text-muted">Util. carico</span>
+        <span className="text-muted">{t('status.loadUtil')}</span>
         <span className="text-right font-bold">{fmtPct(safety.loadUtil)}</span>
 
-        <span className="text-muted">Util. pad max</span>
+        <span className="text-muted">{t('status.padUtil')}</span>
         <span className="text-right">{fmtPct(safety.maxPadUtil)}</span>
       </div>
 
       {/* Barra margine ribaltamento */}
       <div className="px-3 pb-2.5 flex flex-col gap-1">
         <div className="flex justify-between text-[10px]">
-          <span className="text-muted font-medium">Margine ribaltamento</span>
+          <span className="text-muted font-medium">{t('status.tippingMargin')}</span>
           <span className="font-mono font-bold">{tippingPct}%</span>
         </div>
         <div className="h-2 rounded-full bg-black/10 overflow-hidden">
@@ -95,7 +97,7 @@ export default function StatusBadge({ safety, compact = false }) {
           />
         </div>
         <p className="text-[9px] text-muted leading-tight">
-          EN 13000 — ribaltamento a 0% · soglia di attenzione a 20%
+          {t('status.en13000')}
         </p>
       </div>
     </div>

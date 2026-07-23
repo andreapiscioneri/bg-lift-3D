@@ -3,6 +3,7 @@ import * as THREE from 'three'
 import { Canvas, useThree } from '@react-three/fiber'
 import { OrbitControls, Grid, ContactShadows, Environment, Html, useGLTF } from '@react-three/drei'
 import { useCraneStore } from '../../store/craneStore'
+import { translate } from '../../i18n/translate'
 
 // ─────────────────────────────────────────────────────────────────
 // Modello CAD reale — "Assieme completo M250" (macchina intera, da STEP).
@@ -396,7 +397,7 @@ function SceneInner() {
         target={[0, 2, 0]}
       />
 
-      <Suspense fallback={<Html center><span className="text-black/60 text-sm">Caricamento…</span></Html>}>
+      <Suspense fallback={<Html center><span className="text-black/60 text-sm">{translate('crane3d.loading')}</span></Html>}>
         <Environment preset="city" />
         <Ground />
         <CraneAssembly />

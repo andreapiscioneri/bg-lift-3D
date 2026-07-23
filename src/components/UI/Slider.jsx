@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from 'react'
+import { useTranslation } from '../../i18n/I18nContext'
 
 /**
  * Slider touch-friendly.
@@ -20,6 +21,7 @@ export default function Slider({
   defaultValue,
   positions,
 }) {
+  const t = useTranslation()
   // Modalità a posizioni fisse: si lavora in "spazio indice" (0..n-1) e si
   // riconverte al valore meccanico; il testo digitato scatta al foro più vicino.
   const fixed = Array.isArray(positions) && positions.length > 1
@@ -71,7 +73,7 @@ export default function Slider({
             onClick={(e) => { e.preventDefault(); onChange(defaultValue) }}
             className="text-[9px] font-semibold text-accent hover:underline text-left"
           >
-            Azzera
+            {t('controls.resetField')}
           </button>
         </div>
       )}

@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
 import { Link, useParams } from 'react-router-dom'
 import App from '../App'
-import { api, craneTypeLabel } from '../api/client'
+import { api } from '../api/client'
 import { useCraneStore } from '../store/craneStore'
+import { useTranslation } from '../i18n/I18nContext'
+import { currentLocale } from '../utils/format'
+import LanguageSelector from '../components/UI/LanguageSelector'
 
 /**
  * Pagina progetto: carica il progetto dal backend, inizializza lo store del
@@ -13,6 +16,7 @@ export default function ConfiguratorPage() {
   const [project, setProject] = useState(null)
   const [error, setError] = useState(null)
   const loadProject = useCraneStore((s) => s.loadProject)
+  const t = useTranslation()
 
   useEffect(() => {
     let cancelled = false
@@ -31,7 +35,7 @@ export default function ConfiguratorPage() {
     return (
       <div className="min-h-dvh flex flex-col items-center justify-center gap-3 bg-neutral-50">
         <p className="text-danger">{error}</p>
-        <Link to="/" className="text-sm text-accent underline">Torna ai progetti</Link>
+        <Link to="/" className="text-sm text-accent underline">{t('configurator.backToProjects')}</Link>
       </div>
     )
   }
@@ -39,7 +43,7 @@ export default function ConfiguratorPage() {
   if (!project) {
     return (
       <div className="min-h-dvh flex items-center justify-center bg-neutral-50">
-        <p className="text-muted text-sm">Caricamento progetto…</p>
+        <p className="text-muted text-sm">{t('common.loadingProject')}</p>
       </div>
     )
   }
@@ -58,6 +62,7 @@ function TopBar({ project }) {
   const [saving, setSaving] = useState(false)
   const [savedAt, setSavedAt] = useState(null)
   const [error, setError] = useState(null)
+  const t = useTranslation()
 
   async function onSave() {
     setSaving(true)
@@ -79,28 +84,31 @@ function TopBar({ project }) {
         to="/"
         className="text-sm text-white/70 hover:text-white transition flex items-center gap-1"
       >
-        ← Progetti
+        ← {t('configurator.back')}
       </Link>
       <div className="w-px h-5 bg-white/20" />
       <div className="min-w-0">
         <span className="text-sm font-semibold truncate">{project.name}</span>
         <span className="ml-2 text-xs text-white/60 hidden sm:inline">
-          {project.craneModel.code} · {craneTypeLabel(project.craneModel.type)}
+          {project.craneModel.code} · {t(`craneType.${project.craneModel.type}`)}
         </span>
       </div>
       <div className="ml-auto flex items-center gap-3">
         {error && <span className="text-xs text-red-400">{error}</span>}
         {savedAt && !error && (
           <span className="text-xs text-white/60">
-            Salvato {savedAt.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' })}
+            {t('configurator.savedAt', {
+              time: savedAt.toLocaleTimeString(currentLocale(), { hour: '2-digit', minute: '2-digit' }),
+            })}
           </span>
         )}
+        <LanguageSelector variant="dark" />
         <button
           onClick={onSave}
           disabled={saving}
           className="rounded-lg bg-accent hover:bg-accent-dark text-white text-sm font-semibold px-4 py-1.5 transition disabled:opacity-50"
         >
-          {saving ? 'Salvataggio…' : 'Salva'}
+          {saving ? t('configurator.saving') : t('configurator.save')}
         </button>
       </div>
     </header>

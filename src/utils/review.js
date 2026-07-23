@@ -1,9 +1,9 @@
-/** Etichette e stili per lo stato di conferma ufficio tecnico. */
-export const REVIEW_LABELS = {
+/** Chiavi i18n per lo stato di conferma ufficio tecnico (null = nessuna etichetta). */
+export const REVIEW_LABEL_KEYS = {
   NONE: null,
-  REQUESTED: 'Inviata all’ufficio tecnico',
-  IN_REVIEW: 'In carico all’ufficio tecnico',
-  CERTIFIED: 'Configurazione certificata',
+  REQUESTED: 'review.requested',
+  IN_REVIEW: 'review.inReview',
+  CERTIFIED: 'review.certified',
 }
 
 /** Classi tailwind per il chip di stato. */
