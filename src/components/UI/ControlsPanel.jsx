@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useCraneStore } from '../../store/craneStore'
+import { useTranslation } from '../../i18n/I18nContext'
 import Slider from './Slider'
 import StatusBadge from './StatusBadge'
 import ReviewBox from './ReviewBox'
@@ -8,11 +9,12 @@ import { LEG_OPEN_DEG, FOOT_LIFT_MAX, LEG_POSITIONS_DEG, KNEE_POSITIONS_DEG } fr
 
 // Gambe stabilizzatrici: apertura 0° = ripiegata lungo l'asse macchina,
 // LEG_OPEN_DEG = tutta aperta a ragno (posa CAD). "Anteriore" = lato punta braccio.
+// La seconda voce è la chiave i18n dell'etichetta.
 const LEG_LABELS = [
-  ['frontLeft',  'Ant. sinistra'],
-  ['frontRight', 'Ant. destra'],
-  ['rearLeft',   'Post. sinistra'],
-  ['rearRight',  'Post. destra'],
+  ['frontLeft',  'controls.legFrontLeft'],
+  ['frontRight', 'controls.legFrontRight'],
+  ['rearLeft',   'controls.legRearLeft'],
+  ['rearRight',  'controls.legRearRight'],
 ]
 
 /**
@@ -28,6 +30,7 @@ const LEG_LABELS = [
  * size='lg' → desktop: layout completo
  */
 export default function ControlsPanel({ size = 'lg' }) {
+  const t                  = useTranslation()
   const model              = useCraneStore((s) => s.model)
   const config             = useCraneStore((s) => s.config)
   const safety             = useCraneStore((s) => s.safety)
@@ -67,7 +70,7 @@ export default function ControlsPanel({ size = 'lg' }) {
             </h1>
             {!xs && (
               <p className="text-[11px] text-muted font-medium mt-0.5">
-                Calcolo portata in tempo reale
+                {t('controls.realtimeCalc')}
               </p>
             )}
           </div>
@@ -75,7 +78,7 @@ export default function ControlsPanel({ size = 'lg' }) {
             onClick={reset}
             className="text-xs font-semibold px-2 py-1.5 rounded border border-line text-black hover:bg-black hover:text-white transition-colors flex-shrink-0"
           >
-            Reset
+            {t('controls.reset')}
           </button>
         </header>
 
@@ -86,10 +89,10 @@ export default function ControlsPanel({ size = 'lg' }) {
       <div className={`flex flex-col ${gap} ${pad} pt-3`}>
 
       {/* Carico al gancio — alimenta reazioni sui piedi e margine ribaltamento */}
-      <Group title="Carico">
+      <Group title={t('controls.groupLoad')}>
         <div className={`flex flex-col ${sGap}`}>
           <Slider
-            label="Peso sollevato"
+            label={t('controls.loadWeight')}
             unit="kg"
             min={0}
             max={2000}
@@ -102,11 +105,11 @@ export default function ControlsPanel({ size = 'lg' }) {
           {safety && (
             <div className="flex flex-col gap-1 text-xs font-mono pt-0.5">
               <div className="flex items-center justify-between">
-                <span className="text-muted">Portata max (SWL)</span>
+                <span className="text-muted">{t('controls.maxSwl')}</span>
                 <span className="font-bold text-accent">{Math.round(safety.swl_kg)} kg</span>
               </div>
               <div className="flex items-center justify-between">
-                <span className="text-muted">Utilizzo carico</span>
+                <span className="text-muted">{t('controls.loadUtil')}</span>
                 <span
                   className="font-bold"
                   style={{ color: safety.loadUtil >= 1 ? '#dc2626' : safety.loadUtil >= 0.85 ? '#b45309' : '#16a34a' }}
@@ -121,19 +124,19 @@ export default function ControlsPanel({ size = 'lg' }) {
 
       {/* ── GRUPPO AEREO — torretta, braccio, jib ─────────────────── */}
       <Group
-        title="Gruppo aereo"
+        title={t('controls.groupAerial')}
         action={
           <button
             onClick={resetBoomConfig}
             className="text-[10px] font-semibold text-accent hover:underline flex-shrink-0"
           >
-            Ripristina
+            {t('controls.restore')}
           </button>
         }
       >
-        <Collapsible title="Braccio" isOpen={open.has('braccio')} onToggle={() => toggle('braccio')} gap={sGap}>
+        <Collapsible title={t('controls.boom')} isOpen={open.has('braccio')} onToggle={() => toggle('braccio')} gap={sGap}>
           <Slider
-            label="Angolo"
+            label={t('controls.angle')}
             unit="°"
             min={model.mainBoom.elevationRangeDeg[0]}
             max={model.mainBoom.elevationRangeDeg[1]}
@@ -144,7 +147,7 @@ export default function ControlsPanel({ size = 'lg' }) {
             compact={compact}
           />
           <Slider
-            label="Corsa sfilo"
+            label={t('controls.extensionStroke')}
             unit="m"
             min={0}
             max={model.mainBoom.strokeMaxM}
@@ -155,7 +158,7 @@ export default function ControlsPanel({ size = 'lg' }) {
             compact={compact}
           />
           <Slider
-            label="Pressione fondello"
+            label={t('controls.borePressure')}
             unit="bar"
             min={0}
             max={model.liftCalculation.cylinders.pressureBoreMax_bar}
@@ -166,7 +169,7 @@ export default function ControlsPanel({ size = 'lg' }) {
             compact={compact}
           />
           <Slider
-            label="Pressione stelo"
+            label={t('controls.rodPressure')}
             unit="bar"
             min={0}
             max={model.liftCalculation.cylinders.pressureRodMax_bar}
@@ -177,7 +180,7 @@ export default function ControlsPanel({ size = 'lg' }) {
             compact={compact}
           />
           <Slider
-            label="Rotazione torretta"
+            label={t('controls.turretRotation')}
             unit="°"
             min={model.turret.rotationRangeDeg[0]}
             max={model.turret.rotationRangeDeg[1]}
@@ -189,7 +192,7 @@ export default function ControlsPanel({ size = 'lg' }) {
           />
           {safety && (
             <div className="flex items-center justify-between text-xs font-mono pt-0.5">
-              <span className="text-muted">Raggio di lavoro</span>
+              <span className="text-muted">{t('controls.workRadius')}</span>
               <span className="font-bold text-accent">{fmtM(safety.radiusM)}</span>
             </div>
           )}
@@ -197,9 +200,9 @@ export default function ControlsPanel({ size = 'lg' }) {
 
         {/* Sezione visibile solo per i modelli con jib (es. M250 + JIB) */}
         {model.jib?.available && (
-          <Collapsible title="Jib" isOpen={open.has('jib')} onToggle={() => toggle('jib')} gap={sGap}>
+          <Collapsible title={t('controls.jib')} isOpen={open.has('jib')} onToggle={() => toggle('jib')} gap={sGap}>
             <Slider
-              label="Angolo jib"
+              label={t('controls.jibAngle')}
               unit="°"
               min={model.jib.articulationRangeDeg[0]}
               max={model.jib.articulationRangeDeg[1]}
@@ -214,11 +217,11 @@ export default function ControlsPanel({ size = 'lg' }) {
       </Group>
 
       {/* ── GRUPPO TERRA — una sezione per gamba stabilizzatrice ──── */}
-      <Group title="Gruppo terra">
-        {LEG_LABELS.map(([name, label]) => (
+      <Group title={t('controls.groupGround')}>
+        {LEG_LABELS.map(([name, labelKey]) => (
           <Collapsible
             key={name}
-            title={label}
+            title={t(labelKey)}
             isOpen={open.has(name)}
             onToggle={() => toggle(name)}
             gap={sGap}
@@ -229,7 +232,7 @@ export default function ControlsPanel({ size = 'lg' }) {
             }
           >
             <Slider
-              label="Apertura"
+              label={t('controls.opening')}
               unit="°"
               positions={model.outriggers?.legSwingPositionsDeg ?? LEG_POSITIONS_DEG}
               value={config.outriggerAngleDeg?.[name] ?? LEG_OPEN_DEG}
@@ -238,7 +241,7 @@ export default function ControlsPanel({ size = 'lg' }) {
               compact={compact}
             />
             <Slider
-              label="Alt. piede"
+              label={t('controls.footHeight')}
               unit="m"
               min={0}
               max={FOOT_LIFT_MAX}
@@ -249,7 +252,7 @@ export default function ControlsPanel({ size = 'lg' }) {
               compact={compact}
             />
             <Slider
-              label="Ginocchio"
+              label={t('controls.knee')}
               unit="°"
               positions={model.outriggers?.kneePositionsDeg ?? KNEE_POSITIONS_DEG}
               value={config.outriggerKneeDeg?.[name] ?? 0}
@@ -260,21 +263,14 @@ export default function ControlsPanel({ size = 'lg' }) {
           </Collapsible>
         ))}
         <p className="text-[10px] text-muted leading-snug">
-          Apertura e Ginocchio hanno posizioni fisse (fori sulla macchina),
-          regolabili gamba per gamba: apertura 0° = ripiegata lungo il carro,
-          {' '}{LEG_OPEN_DEG}° = tutta aperta; ginocchio 0° = stinco in posa di
-          progetto. Alt. piede: 0 = piede a terra, valori positivi = piede su
-          un appoggio più alto (resta comunque appoggiato e portante). Le
-          reazioni usano le posizioni reali dei piedi ricavate da apertura,
-          ginocchio e alt. piede (geometria dal disegno BGLift); le masse
-          macchina restano indicative.
+          {t('controls.groundHelp', { deg: LEG_OPEN_DEG })}
         </p>
       </Group>
 
       {/* Disclaimer */}
       {!xs && (
         <p className="text-[10px] text-muted leading-relaxed border-t border-line pt-3 flex-shrink-0 mt-auto">
-          Prototipo con dati SWL indicativi. Validare sempre contro la tabella ufficiale BGLift e la normativa EN 13000 prima dell&apos;uso in cantiere.
+          {t('controls.disclaimer')}
         </p>
       )}
       </div>

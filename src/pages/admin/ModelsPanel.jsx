@@ -1,7 +1,9 @@
 import { useEffect, useState } from 'react'
-import { api, CRANE_TYPES, craneTypeLabel } from '../../api/client'
+import { api, CRANE_TYPES } from '../../api/client'
+import { useTranslation } from '../../i18n/I18nContext'
 
 export default function ModelsPanel() {
+  const t = useTranslation()
   const [models, setModels] = useState(null)
   const [error, setError] = useState(null)
   const [showCreate, setShowCreate] = useState(false)
@@ -30,7 +32,7 @@ export default function ModelsPanel() {
   }
 
   async function onDelete(m) {
-    if (!window.confirm(`Eliminare il modello ${m.code}?`)) return
+    if (!window.confirm(t('models.confirmDelete', { code: m.code }))) return
     setError(null)
     try {
       await api.delete(`/api/models/${m.id}`)
@@ -47,26 +49,26 @@ export default function ModelsPanel() {
           onClick={() => setShowCreate(true)}
           className="rounded-lg bg-accent hover:bg-accent-dark text-white text-sm font-semibold px-4 py-2 transition"
         >
-          + Nuovo modello
+          {t('models.newModel')}
         </button>
       </div>
 
       {error && <p className="text-sm text-danger mb-3">{error}</p>}
 
       {models === null ? (
-        <p className="text-sm text-muted">Caricamento…</p>
+        <p className="text-sm text-muted">{t('common.loading')}</p>
       ) : (
         <div className="bg-white border border-line rounded-2xl overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
               <tr className="text-left text-xs uppercase text-muted border-b border-line">
-                <th className="px-4 py-3">Codice</th>
-                <th className="px-4 py-3">Nome</th>
-                <th className="px-4 py-3">Tipo</th>
-                <th className="px-4 py-3">File 3D</th>
-                <th className="px-4 py-3">Progetti</th>
-                <th className="px-4 py-3">Stato</th>
-                <th className="px-4 py-3 text-right">Azioni</th>
+                <th className="px-4 py-3">{t('models.colCode')}</th>
+                <th className="px-4 py-3">{t('models.colName')}</th>
+                <th className="px-4 py-3">{t('models.colType')}</th>
+                <th className="px-4 py-3">{t('models.colFile3d')}</th>
+                <th className="px-4 py-3">{t('models.colProjects')}</th>
+                <th className="px-4 py-3">{t('models.colStatus')}</th>
+                <th className="px-4 py-3 text-right">{t('models.colActions')}</th>
               </tr>
             </thead>
             <tbody>
@@ -77,21 +79,21 @@ export default function ModelsPanel() {
                     <div className="font-medium">{m.name}</div>
                     {m.description && <div className="text-xs text-muted">{m.description}</div>}
                   </td>
-                  <td className="px-4 py-3 text-muted">{craneTypeLabel(m.type)}</td>
+                  <td className="px-4 py-3 text-muted">{t(`craneType.${m.type}`)}</td>
                   <td className="px-4 py-3 text-xs text-muted font-mono">{m.glbUrl}</td>
                   <td className="px-4 py-3 text-muted">{m._count?.projects ?? 0}</td>
                   <td className="px-4 py-3">
                     <span className={`text-xs font-semibold rounded px-2 py-0.5 ${m.active ? 'bg-safe/10 text-safe' : 'bg-danger/10 text-danger'}`}>
-                      {m.active ? 'Attivo' : 'Disattivato'}
+                      {m.active ? t('models.active') : t('models.inactive')}
                     </span>
                   </td>
                   <td className="px-4 py-3">
                     <div className="flex justify-end gap-2 text-xs">
                       <button onClick={() => toggleActive(m)} className="text-muted hover:text-ink underline">
-                        {m.active ? 'Disattiva' : 'Attiva'}
+                        {m.active ? t('models.deactivate') : t('models.activate')}
                       </button>
                       <button onClick={() => onDelete(m)} className="text-danger/70 hover:text-danger underline">
-                        Elimina
+                        {t('models.delete')}
                       </button>
                     </div>
                   </td>
@@ -113,6 +115,7 @@ export default function ModelsPanel() {
 }
 
 function CreateModelModal({ onClose, onCreated }) {
+  const t = useTranslation()
   const [form, setForm] = useState({ code: '', name: '', type: 'CINGOLATA', description: '' })
   const [glbFile, setGlbFile] = useState(null)
   const [dataFile, setDataFile] = useState(null)
@@ -143,37 +146,36 @@ function CreateModelModal({ onClose, onCreated }) {
   return (
     <div className="fixed inset-0 z-50 bg-black/40 flex items-center justify-center p-4 overflow-y-auto" onClick={onClose}>
       <div className="bg-white rounded-2xl shadow-panel w-full max-w-lg p-6 my-8" onClick={(e) => e.stopPropagation()}>
-        <h2 className="text-lg font-semibold mb-1">Nuovo modello gru</h2>
+        <h2 className="text-lg font-semibold mb-1">{t('models.modalTitle')}</h2>
         <p className="text-sm text-muted mb-5">
-          Servono il file 3D (.glb) e il file JSON con i dati tecnici (geometrie, tabella di carico,
-          configurazione di default — stessa struttura di BR0089.json).
+          {t('models.modalSubtitle')}
         </p>
 
         <form onSubmit={onSubmit} className="space-y-4">
           <div className="grid grid-cols-2 gap-3">
             <label className="block">
-              <span className="text-sm font-medium">Codice</span>
-              <input type="text" required value={form.code} onChange={set('code')} placeholder="Es. BR0100" className={input} />
+              <span className="text-sm font-medium">{t('models.code')}</span>
+              <input type="text" required value={form.code} onChange={set('code')} placeholder={t('models.codePlaceholder')} className={input} />
             </label>
             <label className="block">
-              <span className="text-sm font-medium">Tipo gru</span>
+              <span className="text-sm font-medium">{t('models.craneType')}</span>
               <select value={form.type} onChange={set('type')} className={`${input} bg-white`}>
-                {CRANE_TYPES.map((t) => (
-                  <option key={t.value} value={t.value}>{t.label}</option>
+                {CRANE_TYPES.map((ct) => (
+                  <option key={ct.value} value={ct.value}>{t(`craneType.${ct.value}`)}</option>
                 ))}
               </select>
             </label>
           </div>
           <label className="block">
-            <span className="text-sm font-medium">Nome</span>
-            <input type="text" required value={form.name} onChange={set('name')} placeholder="Es. BGLift BR0100" className={input} />
+            <span className="text-sm font-medium">{t('models.name')}</span>
+            <input type="text" required value={form.name} onChange={set('name')} placeholder={t('models.namePlaceholder')} className={input} />
           </label>
           <label className="block">
-            <span className="text-sm font-medium">Descrizione <span className="text-muted font-normal">(opzionale)</span></span>
+            <span className="text-sm font-medium">{t('models.description')} <span className="text-muted font-normal">{t('common.optional')}</span></span>
             <input type="text" value={form.description} onChange={set('description')} className={input} />
           </label>
           <label className="block">
-            <span className="text-sm font-medium">File 3D (.glb)</span>
+            <span className="text-sm font-medium">{t('models.file3d')}</span>
             <input
               type="file" required accept=".glb"
               onChange={(e) => setGlbFile(e.target.files?.[0] ?? null)}
@@ -181,7 +183,7 @@ function CreateModelModal({ onClose, onCreated }) {
             />
           </label>
           <label className="block">
-            <span className="text-sm font-medium">Dati tecnici (.json)</span>
+            <span className="text-sm font-medium">{t('models.dataFile')}</span>
             <input
               type="file" required accept=".json,application/json"
               onChange={(e) => setDataFile(e.target.files?.[0] ?? null)}
@@ -193,10 +195,10 @@ function CreateModelModal({ onClose, onCreated }) {
 
           <div className="flex gap-2 pt-2">
             <button type="button" onClick={onClose} className="flex-1 rounded-lg border border-line text-sm font-medium py-2.5 hover:bg-neutral-50 transition">
-              Annulla
+              {t('common.cancel')}
             </button>
             <button type="submit" disabled={busy} className="flex-1 rounded-lg bg-accent hover:bg-accent-dark text-white text-sm font-semibold py-2.5 transition disabled:opacity-50">
-              {busy ? 'Caricamento…' : 'Crea modello'}
+              {busy ? t('models.creating') : t('models.createModel')}
             </button>
           </div>
         </form>

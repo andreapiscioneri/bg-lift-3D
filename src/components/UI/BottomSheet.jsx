@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback } from 'react'
 import { useCraneStore } from '../../store/craneStore'
+import { useTranslation } from '../../i18n/I18nContext'
 import { fmtM, fmtPct } from '../../utils/format'
 
 /**
@@ -15,13 +16,14 @@ const PEEK_PX    = 88
 const SNAP_NAMES = ['peek', 'half', 'full']
 
 const STATUS_COLOR = { safe: '#16a34a', warning: '#b45309', critical: '#dc2626' }
-const STATUS_LABEL = { safe: 'OK', warning: 'ATT.', critical: 'STOP' }
+const STATUS_LABEL_KEYS = { safe: 'status.shortSafe', warning: 'status.shortWarning', critical: 'status.shortCritical' }
 
 function MiniStatusBar() {
+  const t = useTranslation()
   const safety = useCraneStore((s) => s.safety)
-  if (!safety) return <span className="text-[10px] text-muted font-mono">Calcolo…</span>
+  if (!safety) return <span className="text-[10px] text-muted font-mono">{t('status.calculating')}</span>
   const color = STATUS_COLOR[safety.status] ?? STATUS_COLOR.safe
-  const label = STATUS_LABEL[safety.status] ?? STATUS_LABEL.safe
+  const label = t(STATUS_LABEL_KEYS[safety.status] ?? STATUS_LABEL_KEYS.safe)
   return (
     <div className="flex items-center gap-2 text-[10px] font-mono leading-none">
       <span className="inline-block w-2 h-2 rounded-full flex-shrink-0" style={{ background: color }} />
@@ -43,6 +45,7 @@ function calcSnaps() {
 }
 
 export default function BottomSheet({ children }) {
+  const t = useTranslation()
   const [snap, setSnap]   = useState('peek')
   const [liveY, setLiveY] = useState(null)
   const dragging          = useRef(false)
@@ -141,7 +144,7 @@ export default function BottomSheet({ children }) {
         <div className="flex items-center justify-between w-full px-4">
           <div className="flex items-center gap-3 min-w-0">
             <span className="text-[11px] text-accent uppercase tracking-[0.15em] font-extrabold leading-none flex-shrink-0">
-              Controlli
+              {t('status.controls')}
             </span>
             {snap === 'peek' && <MiniStatusBar />}
           </div>

@@ -2,6 +2,7 @@ import React from 'react'
 import ReactDOM from 'react-dom/client'
 import { BrowserRouter, Routes, Route, Navigate, useLocation } from 'react-router-dom'
 import { AuthProvider, useAuth } from './auth/AuthContext'
+import { I18nProvider, useTranslation } from './i18n/I18nContext'
 import LoginPage from './pages/LoginPage'
 import DashboardPage from './pages/DashboardPage'
 import ConfiguratorPage from './pages/ConfiguratorPage'
@@ -12,11 +13,12 @@ import './index.css'
 function Protected({ children, roles = null }) {
   const { user, loading } = useAuth()
   const location = useLocation()
+  const t = useTranslation()
 
   if (loading) {
     return (
       <div className="min-h-dvh flex items-center justify-center bg-neutral-50">
-        <p className="text-muted text-sm">Caricamento…</p>
+        <p className="text-muted text-sm">{t('common.loading')}</p>
       </div>
     )
   }
@@ -28,6 +30,7 @@ function Protected({ children, roles = null }) {
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <BrowserRouter>
+      <I18nProvider>
       <AuthProvider>
         <Routes>
           <Route path="/login" element={<LoginPage />} />
@@ -38,6 +41,7 @@ ReactDOM.createRoot(document.getElementById('root')).render(
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AuthProvider>
+      </I18nProvider>
     </BrowserRouter>
   </React.StrictMode>
 )

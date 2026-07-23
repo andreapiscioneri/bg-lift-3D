@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import { Link } from 'react-router-dom'
 import AppShell from '../components/Layout/AppShell'
-import { api, craneTypeLabel } from '../api/client'
+import { api } from '../api/client'
 import { useAuth } from '../auth/AuthContext'
+import { useTranslation } from '../i18n/I18nContext'
+import { currentLocale } from '../utils/format'
 
 function formatDate(iso) {
   if (!iso) return '—'
-  return new Date(iso).toLocaleDateString('it-IT', {
+  return new Date(iso).toLocaleDateString(currentLocale(), {
     day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
   })
 }
@@ -19,6 +21,7 @@ function formatDate(iso) {
  */
 export default function TecnicoPage() {
   const { user } = useAuth()
+  const t = useTranslation()
   const [projects, setProjects] = useState(null)
   const [error, setError] = useState(null)
 
@@ -36,17 +39,17 @@ export default function TecnicoPage() {
   return (
     <AppShell>
       <div className="mb-6">
-        <h1 className="text-xl font-semibold">Ufficio tecnico</h1>
-        <p className="text-sm text-muted">Richieste di conferma configurazione dai clienti</p>
+        <h1 className="text-xl font-semibold">{t('tecnico.title')}</h1>
+        <p className="text-sm text-muted">{t('tecnico.subtitle')}</p>
       </div>
 
       {error && <p className="text-sm text-danger mb-4">{error}</p>}
 
       {projects === null ? (
-        <p className="text-sm text-muted">Caricamento…</p>
+        <p className="text-sm text-muted">{t('common.loading')}</p>
       ) : projects.length === 0 ? (
         <div className="bg-white border border-line rounded-2xl p-12 text-center">
-          <p className="text-muted">Nessuna richiesta in coda. Le nuove richieste dei clienti compariranno qui.</p>
+          <p className="text-muted">{t('tecnico.empty')}</p>
         </div>
       ) : (
         <div className="flex flex-col gap-4">
@@ -60,6 +63,7 @@ export default function TecnicoPage() {
 }
 
 function RequestCard({ project: p, me, onChanged, onError }) {
+  const t = useTranslation()
   const [busy, setBusy] = useState(false)
   const fileRef = useRef(null)
 
@@ -103,16 +107,15 @@ function RequestCard({ project: p, me, onChanged, onError }) {
         <div className="flex items-center gap-2">
           <h2 className="font-semibold leading-tight truncate">{p.name}</h2>
           <span className="text-[10px] font-semibold uppercase bg-neutral-100 text-muted rounded px-1.5 py-0.5 whitespace-nowrap">
-            {p.craneModel.code} · {craneTypeLabel(p.craneModel.type)}
+            {p.craneModel.code} · {t(`craneType.${p.craneModel.type}`)}
           </span>
         </div>
         <p className="text-sm text-muted mt-0.5">
-          Richiesta di <span className="font-medium text-ink">{p.user.name}</span> ({p.user.email})
-          · inviata {formatDate(p.reviewRequestedAt)}
+          {t('tecnico.requestedBy', { name: p.user.name, email: p.user.email, date: formatDate(p.reviewRequestedAt) })}
         </p>
         {p.reviewStatus === 'IN_REVIEW' && (
           <p className="text-xs text-accent font-semibold mt-1">
-            In carico a {mine ? 'te' : p.reviewTechnician?.name ?? '—'}
+            {t('tecnico.assignedTo', { name: mine ? t('common.you') : p.reviewTechnician?.name ?? '—' })}
           </p>
         )}
       </div>
@@ -122,7 +125,7 @@ function RequestCard({ project: p, me, onChanged, onError }) {
           to={`/projects/${p.id}`}
           className="rounded-lg border border-line text-sm font-medium px-3 py-2 hover:bg-neutral-50 transition"
         >
-          Apri configurazione
+          {t('tecnico.openConfiguration')}
         </Link>
 
         {p.reviewStatus === 'REQUESTED' && (
@@ -131,7 +134,7 @@ function RequestCard({ project: p, me, onChanged, onError }) {
             disabled={busy}
             className="rounded-lg bg-accent hover:bg-accent-dark text-white text-sm font-semibold px-4 py-2 transition disabled:opacity-50"
           >
-            {busy ? '…' : 'Prendi in carico'}
+            {busy ? '…' : t('tecnico.claim')}
           </button>
         )}
 
@@ -149,7 +152,7 @@ function RequestCard({ project: p, me, onChanged, onError }) {
               disabled={busy}
               className="rounded-lg bg-safe hover:opacity-90 text-white text-sm font-semibold px-4 py-2 transition disabled:opacity-50"
             >
-              {busy ? 'Caricamento…' : 'Allega PDF e certifica'}
+              {busy ? t('tecnico.certifying') : t('tecnico.certify')}
             </button>
           </>
         )}

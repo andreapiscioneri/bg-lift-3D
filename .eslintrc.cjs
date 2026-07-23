@@ -30,7 +30,7 @@ module.exports = {
     },
     {
       // Provider/hook e bootstrap del router esportano più di soli componenti
-      files: ['src/auth/AuthContext.jsx', 'src/main.jsx'],
+      files: ['src/auth/AuthContext.jsx', 'src/i18n/I18nContext.jsx', 'src/main.jsx'],
       rules: { 'react-refresh/only-export-components': 'off' },
     },
   ],

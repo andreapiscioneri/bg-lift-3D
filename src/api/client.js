@@ -2,6 +2,8 @@
  * Client API minimale: cookie httpOnly gestiti dal browser (same-origin),
  * risposte JSON, errori normalizzati in Error con message leggibile.
  */
+import { translate } from '../i18n/translate'
+
 async function request(path, { method = 'GET', body, formData } = {}) {
   const opts = { method, headers: {} }
   if (formData) {
@@ -20,7 +22,7 @@ async function request(path, { method = 'GET', body, formData } = {}) {
   }
 
   if (!res.ok) {
-    const err = new Error(payload?.error || `Errore ${res.status}`)
+    const err = new Error(payload?.error || translate('common.serverError', { status: res.status }))
     err.status = res.status
     throw err
   }
@@ -36,13 +38,10 @@ export const api = {
   delete: (path) => request(path, { method: 'DELETE' }),
 }
 
+/** Valori enum dei tipi gru; le etichette sono localizzate via i18n (chiave craneType.<value>). */
 export const CRANE_TYPES = [
-  { value: 'CINGOLATA', label: 'Gru cingolata' },
-  { value: 'RAGNO', label: 'Gru ragno' },
-  { value: 'AUTOCARRATA', label: 'Gru autocarrata' },
-  { value: 'TORRE', label: 'Gru a torre' },
+  { value: 'CINGOLATA' },
+  { value: 'RAGNO' },
+  { value: 'AUTOCARRATA' },
+  { value: 'TORRE' },
 ]
-
-export function craneTypeLabel(value) {
-  return CRANE_TYPES.find((t) => t.value === value)?.label ?? value
-}
