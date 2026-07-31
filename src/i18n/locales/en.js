@@ -168,6 +168,7 @@ export default {
     workRadius: 'Working radius',
     jib: 'Jib',
     jibAngle: 'Jib angle',
+    jibStroke: 'Jib extension stroke',
     groupGround: 'Ground group',
     opening: 'Opening',
     footHeight: 'Foot height',

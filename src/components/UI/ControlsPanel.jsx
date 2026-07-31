@@ -212,6 +212,19 @@ export default function ControlsPanel({ size = 'lg' }) {
               onChange={(v) => setConfig({ jibAngleDeg: v })}
               compact={compact}
             />
+            {model.jib.strokeMaxM > 0 && (
+              <Slider
+                label={t('controls.jibStroke')}
+                unit="m"
+                min={0}
+                max={model.jib.strokeMaxM}
+                step={0.05}
+                value={config.jibStrokeM ?? 0}
+                defaultValue={model.defaultConfiguration.jibStrokeM ?? 0}
+                onChange={(v) => setConfig({ jibStrokeM: v })}
+                compact={compact}
+              />
+            )}
           </Collapsible>
         )}
       </Group>

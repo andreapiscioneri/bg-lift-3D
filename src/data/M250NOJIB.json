@@ -120,7 +120,7 @@
   "jib": {
     "available": false,
     "liftCalculation": null,
-    "liftCalculationNote": "Versione senza jib: nessun calcolo jib. Il campo resta per uniformità di schema con BR0089 (M250 + JIB)."
+    "liftCalculationNote": "Versione senza jib: il carico è al gancio in testa braccio e la portata viene da model.liftCalculation (Excel BGLift senza jib). Il campo resta per uniformità di schema con BR0089 (M250 + JIB)."
   },
   "outriggers": {
     "count": 4,
@@ -215,7 +215,7 @@
     "pressureRodBar": 30,
     "rotationDeg": 0,
     "jibAngleDeg": 0,
-    "jibLengthM": 0,
-    "loadKg": 0
+    "loadKg": 0,
+    "jibStrokeM": 0
   }
 }

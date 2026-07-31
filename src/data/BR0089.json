@@ -62,14 +62,26 @@
   "jib": {
     "available": true,
     "type": "articulated-with-telescope",
-    "mass": 720,
+    "mass": 205,
     "mountedOffsetM": 0.4,
     "articulationRangeDeg": [0, 75],
-    "retractedLength": 4.0,
-    "extendedLength": 9.5,
+    "strokeMaxM": 1.45,
     "telescopeSpeedMPerSec": 0.25,
-    "liftCalculation": null,
-    "liftCalculationNote": "Placeholder: le formule di portata del jib (2 sfili telescopici + bielle, vedi DWG 'Calcolo carico sollevato M250') non sono ancora state fornite da BGLift. Quando disponibili vanno qui con la stessa struttura di model.liftCalculation; il worker (computeJibLiftCapacity) le userà per limitare la SWL a min(braccio, jib). Anche massa/lunghezze qui sopra sono indicative."
+    "liftCalculation": {
+      "description": "Calcolo carico sollevato CON JIB — costanti e formule dall'Excel BGLift 'Calcolo carico sollevato M250 con Jib' (celle C47..C56). Coordinate in mm nel piano verticale, origine O = cerniera torre/braccio. Il fulcro braccio/jib trasla con 3× la corsa del braccio; le sezioni jib BR0012/BR0013 e il gancio traslano con 1×/2×/2× la corsa jib (max 1450 mm). L'angolo jib nell'Excel è ASSOLUTO dall'orizzontale: il worker lo ricava come angolo braccio − piega jib. Verificato identico all'Excel (α=47°, corsa braccio 2150, jib 20°, corsa jib 1450, 180/30 bar → 96.639297 kg).",
+      "boomJibPivot_mm": [2847.49, -465.72],
+      "pivotExtendsWithStroke": 3,
+      "sections": [
+        { "id": "BR0011", "mass_kg": 118, "cg_mm": [772.62, 129.55],  "extendsWithStroke": 0 },
+        { "id": "BR0012", "mass_kg": 46,  "cg_mm": [1120.5, 154.44],  "extendsWithStroke": 1 },
+        { "id": "BR0013", "mass_kg": 41,  "cg_mm": [1084.64, 167.93], "extendsWithStroke": 2 }
+      ],
+      "hook_mm": [2081.07, 44.48],
+      "hookExtendsWithStroke": 2,
+      "strokeMax_mm": 1450,
+      "thirdSectionAtanTypo": true,
+      "thirdSectionAtanTypoNote": "L'Excel in C50 scrive ATAN(O19/(18+2*C41)) invece di ATAN(O19/(O18+2*C41)): manca la 'O' del riferimento di cella, così il braccio 1084.64 mm diventa 18 mm. true = riproduce il foglio ufficiale (default); false = formula coerente (a corsa jib piena 96.553 kg invece di 96.639, −0.09%). Da confermare con BGLift."
+    }
   },
 
   "outriggers": {
@@ -117,7 +129,7 @@
     "pressureRodBar": 30,
     "rotationDeg": 0,
     "jibAngleDeg": 30,
-    "jibLengthM": 0,
+    "jibStrokeM": 0,
     "loadKg": 0
   }
 }

@@ -168,6 +168,7 @@ export default {
     workRadius: 'Rayon de travail',
     jib: 'Jib',
     jibAngle: 'Angle du jib',
+    jibStroke: 'Course de sortie du jib',
     groupGround: 'Groupe au sol',
     opening: 'Ouverture',
     footHeight: 'Hauteur du pied',

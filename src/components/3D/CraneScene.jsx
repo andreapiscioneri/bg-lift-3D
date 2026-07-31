@@ -65,14 +65,37 @@ const BOOM_AXIS = [Math.cos(BOOM_SLIDE_ANGLE_DEG * Math.PI / 180), Math.sin(BOOM
 // uniforme: la sezione i-esima trasla di i × frazione × corsa lungo l'asse.
 const BOOM_SECTION_STROKE = 2.15
 
+// Sfilo del jib: direzione = asse dei tubi jib nella posa CAD (PCA su
+// LM0346/0359/0362 → −1.6°, come JIB_CAD_BEND_DEG); corsa 1450 mm per
+// sezione mobile dall'Excel BGLift "…con Jib".
+const JIB_SLIDE_ANGLE_DEG = -1.6
+const JIB_AXIS = [Math.cos(JIB_SLIDE_ANGLE_DEG * Math.PI / 180), Math.sin(JIB_SLIDE_ANGLE_DEG * Math.PI / 180)]
+const JIB_SECTION_STROKE = 1.45
+
 // Ripartizione delle mesh della parte aerea. Il CAD numera i pezzi del braccio
 // per sezione di appartenenza: LM0286–0302 = 1ª sezione (fissa, col
 // martinetto), LM0303–0315 = 2ª, LM0316–0325 = 3ª, LM0326–0345 = 4ª (con
 // testa/snodo). Il jib e i pezzi non numerati si classificano per geometria;
 // ciò che resta vicino all'asse del braccio (martinetto compreso) va con la
 // 1ª sezione, tutto il resto con la colonna.
+// Jib telescopico: 3 sezioni (BR0011 base, BR0012 1° sfilo, BR0013 2° sfilo
+// nell'Excel "…con Jib"). I tubi annidati sono LM0346 (base, sezione più
+// grande), LM0359 (1° sfilo) e LM0362 (2° sfilo); la ferramenta segue la
+// numerazione per sezione. La minuteria non numerata oltre la testa del tubo
+// base (cx > 1.15: bussole, perni e gruppo gancio) va con l'ultima sezione.
+function classifyJibMesh(name, cx) {
+  const m = /^LM0(\d{3})/.exec(name)
+  if (m) {
+    const n = Number(m[1])
+    if (n >= 359 && n <= 361) return 'jibSfilo1'
+    if (n >= 362 && n <= 367) return 'jibSfilo2'
+    if (n >= 346 && n <= 358) return 'jib'
+  }
+  return cx > 1.15 ? 'jibSfilo2' : 'jib'
+}
+
 function classifyAereaMesh(name, cx, cy, hasJib = true) {
-  if (hasJib && cy > 1.28 && cx > -0.87) return 'jib'
+  if (hasJib && cy > 1.28 && cx > -0.87) return classifyJibMesh(name, cx)
   const m = /^LM0(\d{3})$/.exec(name)
   if (m) {
     const n = Number(m[1])
@@ -206,14 +229,14 @@ useGLTF.preload(MACHINE_MODEL_URL)
 // (pacco delle 4 sezioni + testa + jib) ruota attorno a BOOM_PIN con "Angolo"
 // e il jib attorno a JIB_PIN con "Angolo jib". Il modello è traslato in modo
 // che l'asse ralla coincida con l'origine del mondo.
-function MachineCadModel({ rotationDeg, boomAngleDeg, jibAngleDeg, extensionFrac, legAngles = {}, footLifts = {}, kneeAngles = {} }) {
+function MachineCadModel({ rotationDeg, boomAngleDeg, jibAngleDeg, extensionFrac, jibExtensionFrac = 0, legAngles = {}, footLifts = {}, kneeAngles = {} }) {
   // URL del GLB dal modello caricato (progetto) — fallback sul m250 storico.
   const glbUrl = useCraneStore((s) => s.model?.glbUrl) || MACHINE_MODEL_URL
   // Variante senza jib: niente gruppo jib, le mesh della testa restano al braccio.
   const hasJib = useCraneStore((s) => s.model?.jib?.available ?? true)
   const { scene } = useGLTF(glbUrl)
 
-  const { carro, legs, colonna, boomBase, sfilo1, sfilo2, sfilo3, jib } = useMemo(() => {
+  const { carro, legs, colonna, boomBase, sfilo1, sfilo2, sfilo3, jib, jibSfilo1, jibSfilo2 } = useMemo(() => {
     const pick = (name) => {
       let node = scene.getObjectByName(name)
       if (!node) {
@@ -271,6 +294,8 @@ function MachineCadModel({ rotationDeg, boomAngleDeg, jibAngleDeg, extensionFrac
       sfilo2: aereaGroups.sfilo2 ?? empty(),
       sfilo3: aereaGroups.sfilo3 ?? empty(),
       jib: aereaGroups.jib ?? empty(),
+      jibSfilo1: aereaGroups.jibSfilo1 ?? empty(),
+      jibSfilo2: aereaGroups.jibSfilo2 ?? empty(),
     } }
   }, [scene, hasJib])
 
@@ -283,6 +308,10 @@ function MachineCadModel({ rotationDeg, boomAngleDeg, jibAngleDeg, extensionFrac
   // braccio (in coordinate solidali al braccio già ruotato).
   const step = clamp(extensionFrac, 0, 1) * BOOM_SECTION_STROKE
   const slide = (i) => [BOOM_AXIS[0] * step * i, BOOM_AXIS[1] * step * i, 0]
+  // Sfilo jib: le 2 sezioni mobili traslano di 1× e 2× la corsa lungo il
+  // proprio asse (coordinate solidali al jib già ruotato).
+  const jibStep = clamp(jibExtensionFrac, 0, 1) * JIB_SECTION_STROKE
+  const jibSlide = (i) => [JIB_AXIS[0] * jibStep * i, JIB_AXIS[1] * jibStep * i, 0]
 
   return (
     <group position={[0, -MACHINE_GROUND_Y, 0]}>
@@ -345,6 +374,12 @@ function MachineCadModel({ rotationDeg, boomAngleDeg, jibAngleDeg, extensionFrac
                 <group position={[JIB_PIN[0], JIB_PIN[1], 0]} rotation={[0, 0, jibRad]}>
                   <group position={[-JIB_PIN[0], -JIB_PIN[1], 0]}>
                     <primitive object={jib} />
+                    <group position={jibSlide(1)}>
+                      <primitive object={jibSfilo1} />
+                    </group>
+                    <group position={jibSlide(2)}>
+                      <primitive object={jibSfilo2} />
+                    </group>
                   </group>
                 </group>
               </group>
@@ -435,6 +470,9 @@ function CraneAssembly() {
   // articolati internamente al modello. "Corsa sfilo" (m per cilindro) è la
   // stessa grandezza dell'Excel di calcolo: frazione = corsa / corsa max.
   const extensionFrac = config.boomStrokeM / model.mainBoom.strokeMaxM
+  const jibExtensionFrac = model.jib?.strokeMaxM > 0
+    ? (config.jibStrokeM ?? 0) / model.jib.strokeMaxM
+    : 0
 
   return (
     <MachineCadModel
@@ -442,6 +480,7 @@ function CraneAssembly() {
       boomAngleDeg={config.mainBoomAngleDeg}
       jibAngleDeg={config.jibAngleDeg}
       extensionFrac={extensionFrac}
+      jibExtensionFrac={jibExtensionFrac}
       legAngles={config.outriggerAngleDeg}
       footLifts={config.outriggerFootLiftM}
       kneeAngles={config.outriggerKneeDeg}

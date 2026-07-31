@@ -83,23 +83,90 @@ function computeLiftCapacity(angleDeg, strokeMm, L, pressures = {}) {
 }
 
 // ─────────────────────────────────────────────────────────────────
-// Portata con jib — PLACEHOLDER (dati BGLift non ancora disponibili)
+// Carico sollevato CON JIB — formule dell'Excel BGLift "…M250 con Jib"
 // ─────────────────────────────────────────────────────────────────
 
 /**
- * Limite di carico alla punta del jib. L'Excel/DWG "Calcolo carico sollevato
- * M250" copre solo il braccio: le formule del jib (2 sfili telescopici,
- * bielle di articolazione) non sono ancora state fornite. Quando arriveranno
- * andranno in `model.jib.liftCalculation` (stessa filosofia di
- * `model.liftCalculation`) e questa funzione dovrà restituire la portata
- * ammessa alla punta; la SWL effettiva diventerà min(braccio, jib).
- * Finché restituisce null il jib incide solo sulla cinematica
- * (computeWorkingRadius / computeTipHeight), non sul limite di carico.
+ * Proiezione (orizzontale, verticale) di un punto del braccio/jib rispetto
+ * all'origine dei momenti, secondo la convenzione dei fogli BGLift:
+ *   d = |(x, y)| · cos(α + atan(y / x))    [orizzontale]
+ *   h = |(x, y)| · sin(α + atan(y / x))    [verticale]
+ * `atanDenom` esiste solo per riprodurre il refuso della cella C50
+ * dell'Excel con jib (vedi computeJibLiftCapacity).
+ */
+function project(x, y, angleDeg, atanDenom = x) {
+  const r = Math.hypot(x, y)
+  const φ = d2r(angleDeg) + Math.atan(y / atanDenom)
+  return { horiz: r * Math.cos(φ), vert: r * Math.sin(φ) }
+}
+
+/**
+ * Riproduce il foglio "Carico sollevato" dell'Excel BGLift "Calcolo carico
+ * sollevato M250 con Jib" (celle C47..C56). Rispetto al foglio senza jib:
+ *  • il carico non è più in testa al braccio ma alla punta del jib;
+ *  • il momento dei pesi propri somma braccio (C49) e jib (C50);
+ *  • il jib ha un proprio angolo ASSOLUTO (C40, dall'orizzontale) e una
+ *    propria corsa di sfilo (C41, max 1450 mm, 2 sezioni mobili).
+ *
+ * Il momento del jib (C50) è calcolato attorno al fulcro braccio/jib e poi
+ * riportato su O aggiungendo massa_jib_totale × distanza_orizzontale_fulcro.
+ *
+ * NOTA — refuso nell'Excel: nella 3ª sezione del jib C50 scrive
+ * `ATAN(O19/(18+2*C41))` invece di `ATAN(O19/(O18+2*C41))` (manca la "O"
+ * del riferimento di cella, così 1084.64 diventa 18). Di default lo
+ * riproduciamo per allinearci al foglio ufficiale; mettendo
+ * `thirdSectionAtanTypo: false` nei dati si usa la formula coerente
+ * (a corsa jib piena: 96.553 kg invece di 96.639 kg, −0.09%).
  */
 function computeJibLiftCapacity(state, model, lift) {
-  if (!model.jib?.available || !(state.jibLengthM > 0)) return null
-  if (!model.jib.liftCalculation) return null // TODO: formule jib BGLift
-  return null
+  const J = model.jib?.liftCalculation
+  if (!model.jib?.available || !J) return null
+
+  const boomStroke_mm = clamp((state.boomStrokeM ?? 0) * 1000, 0, model.liftCalculation.strokeMax_mm)
+  const jibStroke_mm = clamp((state.jibStrokeM ?? 0) * 1000, 0, J.strokeMax_mm)
+  const αBoom = state.mainBoomAngleDeg
+  // L'Excel usa l'angolo jib ASSOLUTO (dall'orizzontale); in configurazione
+  // `jibAngleDeg` è la piega sotto l'asse del braccio.
+  const αJib = αBoom - state.jibAngleDeg
+
+  // C52 — fulcro braccio/jib: si sposta con lo sfilo del braccio.
+  const px = J.boomJibPivot_mm[0] + J.pivotExtendsWithStroke * boomStroke_mm
+  const py = J.boomJibPivot_mm[1]
+  const pivot = project(px, py, αBoom)
+
+  // C50 — momento dei pesi propri del jib attorno a O.
+  const typo = J.thirdSectionAtanTypo !== false
+  let jibMoment_kgmm = 0
+  let jibMass_kg = 0
+  J.sections.forEach((sec, i) => {
+    const x = sec.cg_mm[0] + sec.extendsWithStroke * jibStroke_mm
+    const y = sec.cg_mm[1]
+    // il refuso riguarda solo la 3ª sezione (indice 2)
+    const denom = typo && i === 2 ? 18 + sec.extendsWithStroke * jibStroke_mm : x
+    jibMoment_kgmm += project(x, y, αJib, denom).horiz * sec.mass_kg
+    jibMass_kg += sec.mass_kg
+  })
+  jibMoment_kgmm += jibMass_kg * pivot.horiz
+
+  // C53 — gancio: fulcro + proiezione del gancio lungo il jib.
+  const hx = J.hook_mm[0] + J.hookExtendsWithStroke * jibStroke_mm
+  const hy = J.hook_mm[1]
+  const hook = project(hx, hy, αJib)
+  const hookHoriz_mm = pivot.horiz + hook.horiz
+  const hookVert_mm = pivot.vert + hook.vert
+
+  // C51 + C56 — momento totale e carico sollevato.
+  const selfMoment_kgmm = lift.selfMoment_kgmm + jibMoment_kgmm
+  const capacity_kg = (lift.cylArm_mm * lift.cylForce_kg - selfMoment_kgmm) / hookHoriz_mm
+
+  return {
+    capacity_kg,
+    hookHoriz_mm,
+    hookVert_mm,
+    pivotHoriz_mm: pivot.horiz,
+    jibMass_kg,
+    selfMoment_kgmm,
+  }
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -107,36 +174,21 @@ function computeJibLiftCapacity(state, model, lift) {
 // ─────────────────────────────────────────────────────────────────
 
 /**
- * Raggio orizzontale dal centro ralla al gancio (o alla punta del jib).
+ * Raggio orizzontale dal centro ralla al gancio (punta del jib se montato).
  * La cerniera O sta pivot.z metri rispetto all'asse ralla (negativo =
  * arretrata); la distanza orizzontale O→gancio viene dal calcolo Excel.
- *
- * Con Jib articolato:
- *   αjib_assoluto = α_braccio - δjib   (δjib positivo = piega giù rispetto al braccio)
  */
-function computeWorkingRadius(state, model, lift) {
-  let R = model.mainBoom.pivot.z + lift.hookHoriz_mm / 1000
-
-  if (model.jib?.available && state.jibLengthM > 0) {
-    const αJib = d2r(state.mainBoomAngleDeg - state.jibAngleDeg)
-    R += state.jibLengthM * Math.cos(αJib)
-  }
-
-  return Math.max(0.1, R)
+function computeWorkingRadius(state, model, lift, jibLift) {
+  const hookHoriz_mm = jibLift ? jibLift.hookHoriz_mm : lift.hookHoriz_mm
+  return Math.max(0.1, model.mainBoom.pivot.z + hookHoriz_mm / 1000)
 }
 
 /**
  * Altezza del gancio (o punta Jib) sopra il suolo — per HUD e debug.
  */
-function computeTipHeight(state, model, lift) {
-  let h = model.mainBoom.pivot.y + lift.hookVert_mm / 1000
-
-  if (model.jib?.available && state.jibLengthM > 0) {
-    const αJib = d2r(state.mainBoomAngleDeg - state.jibAngleDeg)
-    h += state.jibLengthM * Math.sin(αJib)
-  }
-
-  return h
+function computeTipHeight(state, model, lift, jibLift) {
+  const hookVert_mm = jibLift ? jibLift.hookVert_mm : lift.hookVert_mm
+  return model.mainBoom.pivot.y + hookVert_mm / 1000
 }
 
 // ─────────────────────────────────────────────────────────────────
@@ -209,7 +261,7 @@ function computePadPositions(state, outriggers) {
   })
 }
 
-function computeOutriggerReactions(state, model, radiusM) {
+function computeOutriggerReactions(state, model, radiusM, jibLift) {
   const g = 9.81
   const { outriggers, chassis, turret, mainBoom, jib, stabilityLimits } = model
 
@@ -221,7 +273,10 @@ function computeOutriggerReactions(state, model, radiusM) {
   const mChassis     = chassis.totalMass
   const mTurret      = turret.mass                             // include contrappeso
   const mBoom        = model.liftCalculation.sections.reduce((s, sec) => s + sec.mass_kg, 0)
-  const mJib         = (jib?.available && state.jibLengthM > 0) ? jib.mass : 0
+  // Massa jib: dalle sezioni dell'Excel con jib quando disponibili
+  // (205 kg = BR0011+12+13), altrimenti il vecchio placeholder.
+  const mJib         = jibLift ? jibLift.jibMass_kg
+                     : (jib?.available && state.jibLengthM > 0) ? jib.mass : 0
   const mLoad        = state.loadKg * φ                        // carico amplificato
   const mTotal       = mChassis + mTurret + mBoom + mJib + mLoad
 
@@ -242,12 +297,18 @@ function computeOutriggerReactions(state, model, radiusM) {
     z: cosRot * turCGloc.z + sinRot * turCGloc.x,
   }
 
-  // Braccio: CG al punto medio dell'asse del braccio (proiezione orizz.)
-  const boomMidR = mainBoom.pivot.z + boomH / 2
+  // Braccio: CG al punto medio dell'asse del braccio (proiezione orizz.).
+  // Col jib il braccio finisce al fulcro braccio/jib, non al gancio.
+  const boomTipR = jibLift
+    ? mainBoom.pivot.z + jibLift.pivotHoriz_mm / 1000
+    : boomH
+  const boomMidR = mainBoom.pivot.z + (boomTipR - mainBoom.pivot.z) / 2
   const cgBoom   = { x: sinRot * boomMidR, z: cosRot * boomMidR }
 
-  // Jib: CG approssimato alla punta del braccio principale (conservativo)
-  const cgJib = { x: sinRot * radiusM, z: cosRot * radiusM }
+  // Jib: CG a metà tra fulcro braccio/jib e gancio quando la geometria è
+  // nota, altrimenti alla punta (approssimazione conservativa storica).
+  const jibMidR = jibLift ? (boomTipR + radiusM) / 2 : radiusM
+  const cgJib = { x: sinRot * jibMidR, z: cosRot * jibMidR }
 
   // Carico al gancio
   const cgLoad = { x: sinRot * radiusM, z: cosRot * radiusM }
@@ -321,20 +382,18 @@ const api = {
       model.liftCalculation,
       { boreBar: state.pressureBoreBar, rodBar: state.pressureRodBar },
     )
-    const radiusM  = computeWorkingRadius(state, model, lift)
-    const tipHeightM = computeTipHeight(state, model, lift)
-    // SWL = limite braccio, eventualmente ridotto dal limite jib quando le
-    // formule saranno disponibili (oggi computeJibLiftCapacity → null).
-    const jibCapacity_kg = computeJibLiftCapacity(state, model, lift)
-    const swl_kg = Math.max(0, jibCapacity_kg != null
-      ? Math.min(lift.capacity_kg, jibCapacity_kg)
-      : lift.capacity_kg)
+    // Con il jib montato il carico è alla sua punta: la portata viene dal
+    // foglio "…con Jib" (momento braccio + jib, gancio a fine jib).
+    const jibLift = computeJibLiftCapacity(state, model, lift)
+    const radiusM  = computeWorkingRadius(state, model, lift, jibLift)
+    const tipHeightM = computeTipHeight(state, model, lift, jibLift)
+    const swl_kg = Math.max(0, (jibLift ?? lift).capacity_kg)
 
     // Utilizzo del carico (senza φ — il carico reale vs SWL nominale)
     const loadUtil = swl_kg > 0 ? state.loadKg / swl_kg : Infinity
 
     const { reactions, tippingMargin, cx, cz } =
-      computeOutriggerReactions(state, model, radiusM)
+      computeOutriggerReactions(state, model, radiusM, jibLift)
 
     const maxPadUtil = Math.max(...reactions.map((r) => r.utilization))
 

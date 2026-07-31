@@ -168,6 +168,7 @@ export default {
     workRadius: 'Arbeitsradius',
     jib: 'Jib',
     jibAngle: 'Jib-Winkel',
+    jibStroke: 'Jib-Ausschubhub',
     groupGround: 'Bodengruppe',
     opening: 'Öffnung',
     footHeight: 'Fußhöhe',
