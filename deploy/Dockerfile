@@ -4,7 +4,7 @@
 # ─────────────────────────────────────────────────────────────────
 
 # ---- Stage 1: build (frontend + prisma client) ----
-FROM node:20-bookworm-slim AS build
+FROM node:22-bookworm-slim AS build
 WORKDIR /app
 
 # Dipendenze complete (servono devDeps: vite, prisma CLI, ecc.).
@@ -20,7 +20,7 @@ RUN npx prisma generate \
  && npm run build          # produce ./dist
 
 # ---- Stage 2: runtime ----
-FROM node:20-bookworm-slim AS runtime
+FROM node:22-bookworm-slim AS runtime
 WORKDIR /app
 ENV NODE_ENV=production
 
